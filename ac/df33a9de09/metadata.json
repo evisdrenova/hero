@@ -3,15 +3,10 @@
   "checkpoint_id": "acdf33a9de09",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 1,
   "files_touched": [
     "src/App.tsx",
-    "src/features/diff/DiffCommentBox.tsx",
-    "src/features/diff/DiffView.tsx",
-    "src/features/diff/ReviewBar.tsx",
-    "src/features/diff/build-review-prompt.ts",
-    "src/features/terminal/TerminalPanel.tsx",
-    "src/hooks/use-diff-comments.ts"
+    "src/features/diff/DiffView.tsx"
   ],
   "sessions": [
     {
@@ -19,19 +14,13 @@
       "transcript": "/ac/df33a9de09/0/full.jsonl",
       "content_hash": "/ac/df33a9de09/0/content_hash.txt",
       "prompt": "/ac/df33a9de09/0/prompt.txt"
-    },
-    {
-      "metadata": "/ac/df33a9de09/1/metadata.json",
-      "transcript": "/ac/df33a9de09/1/full.jsonl",
-      "content_hash": "/ac/df33a9de09/1/content_hash.txt",
-      "prompt": "/ac/df33a9de09/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 161,
-    "cache_creation_tokens": 202293,
-    "cache_read_tokens": 10300001,
-    "output_tokens": 76440,
-    "api_call_count": 121
+    "input_tokens": 126,
+    "cache_creation_tokens": 147143,
+    "cache_read_tokens": 8906352,
+    "output_tokens": 59160,
+    "api_call_count": 92
   }
 }
