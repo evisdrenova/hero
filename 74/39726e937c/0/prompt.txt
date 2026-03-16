@@ -1,0 +1,29 @@
+remove trails for now. on the branch tab make sure to add repo name so like entire-app/main. the top bar should just be checkpoints and diff. The diff that the top level should be all code changes on the branch. then when user clicks on a specific checkpoint it should have new tabs transcript and diff . this diff should just be this checkpoint changes. use superpowers brainstorming
+
+---
+
+yes
+
+---
+
+use the visual companion
+
+---
+
+no create the ui not the teerminal art
+
+---
+
+b and make the repo list collapsible
+
+---
+
+implement
+
+---
+
+commit
+
+---
+
+make repo left nav collapsible
