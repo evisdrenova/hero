@@ -1,0 +1,1 @@
+when I click on a checkpoint the transcript isn't there or the diff viewer
