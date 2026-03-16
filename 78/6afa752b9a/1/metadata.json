@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "786afa752b9a",
+  "session_id": "5299bafe-a9ba-4aef-9ac1-1bf97ca2bea2",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-16T22:29:17.332666Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/lib.rs",
+    "src/components/TitleBar.tsx",
+    "src/features/diff/DiffView.tsx",
+    "src/index.css",
+    "src/lib/ipc.ts",
+    "src/main.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "6a314cbe7fc7",
+  "token_usage": {
+    "input_tokens": 19,
+    "cache_creation_tokens": 38072,
+    "cache_read_tokens": 546808,
+    "output_tokens": 8804,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-16T22:29:17.288687Z",
+    "agent_lines": 191,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 191,
+    "agent_percentage": 100
+  }
+}
