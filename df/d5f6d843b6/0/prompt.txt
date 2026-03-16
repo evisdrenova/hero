@@ -1,0 +1,1 @@
+/var/folders/5g/w6qvhr890pxfz9sg1l0d5c0r0000gn/T/TemporaryItems/NSIRD_screencaptureui_NLYWHB/Screenshot\ 2026-03-16\ at\ 3.07.42 PM.png  make diff more like this but in dark mode and also implement a light mode toggle
