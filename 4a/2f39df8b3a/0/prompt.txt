@@ -1,0 +1,5 @@
+remove all mocked data and fallbacks
+
+---
+
+[I/var/folders/5g/w6qvhr890pxfz9sg1l0d5c0r0000gn/T/TemporaryItems/NSIRD_screencaptureui_xYTzxr/Screenshot\ 2026-03-16\ at\ 1.55.24 PM.png /var/folders/5g/w6qvhr890pxfz9sg1l0d5c0r0000gn/T/TemporaryItems/NSIRD_screencaptureui_GxfBk6/Screenshot\ 2026-03-16\ at\ 1.55.55 PM.png  this data is all I ever seen even when clicking on different repos and worktrees
