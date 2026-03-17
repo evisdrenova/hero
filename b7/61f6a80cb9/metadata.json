@@ -3,7 +3,7 @@
   "checkpoint_id": "b761f6a80cb9",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 4,
+  "checkpoints_count": 1,
   "files_touched": [
     "src-tauri/src/lib.rs",
     "src-tauri/src/session/mod.rs",
@@ -22,31 +22,13 @@
       "transcript": "/b7/61f6a80cb9/0/full.jsonl",
       "content_hash": "/b7/61f6a80cb9/0/content_hash.txt",
       "prompt": "/b7/61f6a80cb9/0/prompt.txt"
-    },
-    {
-      "metadata": "/b7/61f6a80cb9/1/metadata.json",
-      "transcript": "/b7/61f6a80cb9/1/full.jsonl",
-      "content_hash": "/b7/61f6a80cb9/1/content_hash.txt",
-      "prompt": "/b7/61f6a80cb9/1/prompt.txt"
-    },
-    {
-      "metadata": "/b7/61f6a80cb9/2/metadata.json",
-      "transcript": "/b7/61f6a80cb9/2/full.jsonl",
-      "content_hash": "/b7/61f6a80cb9/2/content_hash.txt",
-      "prompt": "/b7/61f6a80cb9/2/prompt.txt"
-    },
-    {
-      "metadata": "/b7/61f6a80cb9/3/metadata.json",
-      "transcript": "/b7/61f6a80cb9/3/full.jsonl",
-      "content_hash": "/b7/61f6a80cb9/3/content_hash.txt",
-      "prompt": "/b7/61f6a80cb9/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2716,
-    "cache_creation_tokens": 396329,
-    "cache_read_tokens": 12441353,
-    "output_tokens": 86624,
-    "api_call_count": 160
+    "input_tokens": 36,
+    "cache_creation_tokens": 54373,
+    "cache_read_tokens": 1683126,
+    "output_tokens": 14800,
+    "api_call_count": 33
   }
 }
