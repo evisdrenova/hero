@@ -1,0 +1,17 @@
+fix these warning: variable `total_lines` is assigned to, but never used
+   --> src/lib.rs:181:9
+    |
+181 |     let mut total_lines: u32 = 0;
+    |         ^^^^^^^^^^^^^^^
+    |
+    = note: consider using `_total_lines` instead
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `total_lines` is never read
+   --> src/lib.rs:188:9
+    |
+188 |         total_lines += 1;
+    |         ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default   and why can i move the entire app around my screen. it stuck in one location
