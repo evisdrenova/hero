@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "9f893042685b",
+  "session_id": "a916ef38-3c2b-47ac-b497-1ebaa963900c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-17T23:16:08.061546Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src-tauri/src/lib.rs",
+    "src/App.tsx",
+    "src/features/debug/BranchDebugContainer.tsx",
+    "src/features/diff/ReviewBar.tsx",
+    "src/features/terminal/GhosttyTerminal.tsx",
+    "src/features/terminal/TerminalPanel.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "7bb3af8aa243",
+  "token_usage": {
+    "input_tokens": 7,
+    "cache_creation_tokens": 37224,
+    "cache_read_tokens": 127944,
+    "output_tokens": 3918,
+    "api_call_count": 7
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-17T23:16:08.007021Z",
+    "agent_lines": 30,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 30,
+    "agent_percentage": 100
+  }
+}
