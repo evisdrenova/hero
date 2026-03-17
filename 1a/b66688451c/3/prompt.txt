@@ -6,7 +6,3 @@
 <summary>Background command "Install npm dependencies in worktree" completed (exit code 0)</summary>
 </task-notification>
 Read the output file to retrieve the result: /private/tmp/claude-501/-Users-alisha-Projects-entire-app/a8bf47e6-0d4f-4798-8eae-c8c8d026f8f4/tasks/bbzl8z7ck.output
-
----
-
-commit
