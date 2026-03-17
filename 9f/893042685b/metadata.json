@@ -3,7 +3,7 @@
   "checkpoint_id": "9f893042685b",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "src-tauri/src/lib.rs",
     "src/App.tsx",
@@ -18,13 +18,19 @@
       "transcript": "/9f/893042685b/0/full.jsonl",
       "content_hash": "/9f/893042685b/0/content_hash.txt",
       "prompt": "/9f/893042685b/0/prompt.txt"
+    },
+    {
+      "metadata": "/9f/893042685b/1/metadata.json",
+      "transcript": "/9f/893042685b/1/full.jsonl",
+      "content_hash": "/9f/893042685b/1/content_hash.txt",
+      "prompt": "/9f/893042685b/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 7,
-    "cache_creation_tokens": 37224,
-    "cache_read_tokens": 127944,
-    "output_tokens": 3918,
-    "api_call_count": 7
+    "input_tokens": 28,
+    "cache_creation_tokens": 69942,
+    "cache_read_tokens": 526521,
+    "output_tokens": 7791,
+    "api_call_count": 20
   }
 }
