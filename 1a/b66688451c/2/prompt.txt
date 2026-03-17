@@ -1,0 +1,5 @@
+the terminal is ghostty? its not working and doesn't look like my ghostty terminal
+
+---
+
+is there a way to make it feel more like ghostty and to have it honor my ghostty config
