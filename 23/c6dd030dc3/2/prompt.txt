@@ -1,0 +1,9 @@
+remove new session button and the terminal is bad. have it use ghostty and it should be attached to branch
+
+---
+
+can you replace bottom terminal with ghostty as well. this would be separate from review process / agent
+
+---
+
+why cant it be embedded? code is open source
