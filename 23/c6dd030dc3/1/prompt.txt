@@ -1,0 +1,1 @@
+the terminal is ghostty? its not working and doesn't look like my ghostty terminal
