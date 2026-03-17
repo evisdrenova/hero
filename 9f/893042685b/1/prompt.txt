@@ -1,0 +1,62 @@
+fix warnings and errors  Failed to run dependency scan. Skipping dependency pre-bundling. Error:   Failed to scan for dependencies from entries:
+  /Users/alisha/Projects/entire-app/index.html
+
+  ✘ [ERROR] No matching export in "src/features/debug/DebugView.tsx" for import "DebugView"
+
+    src/features/debug/BranchDebugContainer.tsx:7:9:
+      7 │ import { DebugView } from "./DebugView";
+        ╵          ~~~~~~~~~
+
+
+    at failureErrorWithLog (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1748:15)
+    at /Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1207:25
+    at runOnEndCallbacks (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1588:45)
+    at buildResponseToResult (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1205:7)
+    at /Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1217:9
+    at new Promise (<anonymous>)
+    at requestCallbacks.on-end (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:1216:54)
+    at handleRequest (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:909:17)
+    at handleIncomingPacket (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:934:7)
+    at Socket.readFromStdout (/Users/alisha/Projects/entire-app/node_modules/esbuild/lib/main.js:862:7)
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching /Users/alisha/Projects/entire-app/src-tauri for changes...
+   Compiling objc2-core-foundation v0.3.2
+   Compiling entire-desktop v0.1.0 (/Users/alisha/Projects/entire-app/src-tauri)
+   Compiling objc2-foundation v0.3.2
+   Compiling objc2-core-video v0.3.2
+   Compiling objc2-core-graphics v0.3.2
+   Compiling objc2-core-text v0.3.2
+   Compiling objc2-metal v0.3.2
+   Compiling objc2-core-image v0.3.2
+   Compiling objc2-cloud-kit v0.3.2
+   Compiling objc2-core-data v0.3.2
+   Compiling objc2-quartz-core v0.3.2
+   Compiling objc2-app-kit v0.3.2
+^[   Compiling objc2-web-kit v0.3.2
+   Compiling muda v0.17.1
+   Compiling tao v0.34.6
+   Compiling window-vibrancy v0.6.0
+   Compiling wry v0.54.3
+   Compiling tauri-runtime v2.10.1
+   Compiling tray-icon v0.21.3
+   Compiling tauri-runtime-wry v2.10.1
+   Compiling tauri v2.10.3
+^[   Compiling tauri-plugin-window-state v2.4.1
+   Compiling tauri-plugin-opener v2.5.3
+warning: variable `total_lines` is assigned to, but never used
+   --> src/lib.rs:182:9
+    |
+182 |     let mut total_lines: u32 = 0;
+    |         ^^^^^^^^^^^^^^^
+    |
+    = note: consider using `_total_lines` instead
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `total_lines` is never read
+   --> src/lib.rs:189:9
+    |
+189 |         total_lines += 1;
+    |         ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
