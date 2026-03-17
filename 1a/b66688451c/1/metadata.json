@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "1ab66688451c",
+  "session_id": "372de881-e326-4aae-a849-e733a7ec9a2e",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-17T17:50:10.40311Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/session/mod.rs",
+    "src/features/debug/CheckpointDebugContainer.tsx",
+    "src/features/debug/DebugView.tsx",
+    "src/hooks/use-tauri-query.ts",
+    "src/lib/ipc.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "cad923e1de51",
+  "token_usage": {
+    "input_tokens": 60,
+    "cache_creation_tokens": 79838,
+    "cache_read_tokens": 2707885,
+    "output_tokens": 25128,
+    "api_call_count": 47
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-17T17:50:10.253293Z",
+    "agent_lines": 96,
+    "human_added": 12,
+    "human_modified": 61,
+    "human_removed": 0,
+    "total_committed": 169,
+    "agent_percentage": 56.80473372781065
+  }
+}

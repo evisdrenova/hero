@@ -1,0 +1,5 @@
+/commit-commands:commit
+
+---
+
+the debug page on the checkpoint page should be scoped to that chcekpoint so only those logs and metadata for that chcekpoint. while the branch level debug should be all the logs and metadata for all the checkpoints on the branch
