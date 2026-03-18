@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "20208f4b1baf",
+  "session_id": "03962c25-4aa7-471d-bce9-10dc3c058f0a",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-18T19:31:44.562538Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/plans/2026-03-18-terminal-multi-tab-split.md",
+    "src-tauri/src/checkpoint/mod.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/session/mod.rs",
+    "src/features/repos/Sidebar.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "a659f77a24f5",
+  "checkpoint_transcript_start": 168,
+  "transcript_lines_at_start": 168,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-18T19:31:44.481213Z",
+    "agent_lines": 763,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 763,
+    "agent_percentage": 100
+  }
+}
