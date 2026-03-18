@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "1a281569b859",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src-tauri/Cargo.toml",
+    "src-tauri/src/ghostty/commands.rs",
+    "src-tauri/src/ghostty/mod.rs",
+    "src-tauri/src/ghostty/overlay.rs",
+    "src-tauri/src/lib.rs",
+    "src/features/terminal/GhosttyTerminal.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1a/281569b859/0/metadata.json",
+      "transcript": "/1a/281569b859/0/full.jsonl",
+      "content_hash": "/1a/281569b859/0/content_hash.txt",
+      "prompt": "/1a/281569b859/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2,
+    "cache_creation_tokens": 756,
+    "cache_read_tokens": 126584,
+    "output_tokens": 61,
+    "api_call_count": 2
+  }
+}
