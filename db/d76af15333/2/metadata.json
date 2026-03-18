@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "dbd76af15333",
+  "session_id": "9bab08cb-945d-404c-83c1-68aa4f7a60b5",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-18T03:12:48.213802Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "package-lock.json",
+    "package.json",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/capabilities/default.json",
+    "src-tauri/src/config/mod.rs",
+    "src-tauri/src/ghostty/overlay.rs",
+    "src-tauri/src/git/mod.rs",
+    "src-tauri/src/lib.rs",
+    "src/App.tsx",
+    "src/features/repos/Sidebar.tsx",
+    "src/features/terminal/TerminalPanel.tsx",
+    "src/hooks/use-tauri-query.ts",
+    "src/lib/ipc.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "3f476ccb7900",
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 87176,
+    "cache_read_tokens": 1682617,
+    "output_tokens": 16090,
+    "api_call_count": 36
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-18T03:12:48.143872Z",
+    "agent_lines": 367,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 367,
+    "agent_percentage": 100
+  }
+}

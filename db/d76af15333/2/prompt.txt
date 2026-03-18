@@ -1,0 +1,1 @@
+Terminal failed: ghostty_surface_new returned null
