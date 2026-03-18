@@ -3,7 +3,7 @@
   "checkpoint_id": "dbd76af15333",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
     "package-lock.json",
     "package.json",
@@ -11,6 +11,7 @@
     "src-tauri/Cargo.toml",
     "src-tauri/capabilities/default.json",
     "src-tauri/src/config/mod.rs",
+    "src-tauri/src/ghostty/overlay.rs",
     "src-tauri/src/git/mod.rs",
     "src-tauri/src/lib.rs",
     "src/App.tsx",
@@ -31,13 +32,19 @@
       "transcript": "/db/d76af15333/1/full.jsonl",
       "content_hash": "/db/d76af15333/1/content_hash.txt",
       "prompt": "/db/d76af15333/1/prompt.txt"
+    },
+    {
+      "metadata": "/db/d76af15333/2/metadata.json",
+      "transcript": "/db/d76af15333/2/full.jsonl",
+      "content_hash": "/db/d76af15333/2/content_hash.txt",
+      "prompt": "/db/d76af15333/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3241,
-    "cache_creation_tokens": 145942,
-    "cache_read_tokens": 1611909,
-    "output_tokens": 13542,
-    "api_call_count": 37
+    "input_tokens": 3281,
+    "cache_creation_tokens": 233118,
+    "cache_read_tokens": 3294526,
+    "output_tokens": 29632,
+    "api_call_count": 73
   }
 }
