@@ -1,0 +1,1 @@
+can ghostty stuff be simplified / refactored? is that big binary necessary? does it need to be stored in git?
