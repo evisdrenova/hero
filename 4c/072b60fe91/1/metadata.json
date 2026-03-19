@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "4c072b60fe91",
+  "session_id": "56a96281-39db-471b-b1f4-5c642f3c978d",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-19T18:52:08.033959Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".gitattributes",
+    ".gitignore",
+    "README.md",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/pty/mod.rs",
+    "src-tauri/vendor/ghostty/BUILD.md",
+    "src-tauri/vendor/ghostty/download.sh",
+    "src-tauri/vendor/ghostty/libghostty.a",
+    "src/lib/ipc.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "45cea729bde0",
+  "token_usage": {
+    "input_tokens": 41,
+    "cache_creation_tokens": 55759,
+    "cache_read_tokens": 1700894,
+    "output_tokens": 9519,
+    "api_call_count": 35
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-19T18:52:07.925791Z",
+    "agent_lines": 122,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 122,
+    "agent_percentage": 100
+  }
+}

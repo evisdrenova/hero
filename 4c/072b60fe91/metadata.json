@@ -3,9 +3,20 @@
   "checkpoint_id": "4c072b60fe91",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 0,
+  "checkpoints_count": 2,
   "files_touched": [
-    "README.md"
+    ".gitattributes",
+    ".gitignore",
+    "README.md",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/pty/mod.rs",
+    "src-tauri/vendor/ghostty/BUILD.md",
+    "src-tauri/vendor/ghostty/download.sh",
+    "src-tauri/vendor/ghostty/libghostty.a",
+    "src/lib/ipc.ts"
   ],
   "sessions": [
     {
@@ -13,13 +24,19 @@
       "transcript": "/4c/072b60fe91/0/full.jsonl",
       "content_hash": "/4c/072b60fe91/0/content_hash.txt",
       "prompt": "/4c/072b60fe91/0/prompt.txt"
+    },
+    {
+      "metadata": "/4c/072b60fe91/1/metadata.json",
+      "transcript": "/4c/072b60fe91/1/full.jsonl",
+      "content_hash": "/4c/072b60fe91/1/content_hash.txt",
+      "prompt": "/4c/072b60fe91/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 16,
-    "cache_creation_tokens": 18243,
-    "cache_read_tokens": 435486,
-    "output_tokens": 3322,
-    "api_call_count": 10
+    "input_tokens": 57,
+    "cache_creation_tokens": 74002,
+    "cache_read_tokens": 2136380,
+    "output_tokens": 12841,
+    "api_call_count": 45
   }
 }

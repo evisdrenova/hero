@@ -1,0 +1,1 @@
+update readme with instructions and clean up the git LFS stuff
