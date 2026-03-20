@@ -1,0 +1,1 @@
+remove book icon next to the respository on the side bar
