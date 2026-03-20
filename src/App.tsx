@@ -100,11 +100,6 @@ export default function App() {
   const [workspaceMap, setWorkspaceMap] = useState<Map<string, TerminalWorkspace>>(
     () => new Map([["main", createTerminalWorkspace()]])
   );
-  const [pendingAgentLaunch, setPendingAgentLaunch] = useState<{
-    tabId: string;
-    agent: string;
-    prompt: string;
-  } | null>(null);
   const [chatSessions, setChatSessions] = useState<Map<string, ChatSession>>(
     () => new Map()
   );
@@ -197,7 +192,7 @@ export default function App() {
     setTerminalPanelVisibility((prev) => setTerminalPanelOpen(prev, tabId, isOpen));
   }, []);
 
-  // Terminal dispatch — open shell and optionally send a prompt
+  // Agent dispatch — create a PTY for the agent and show in Chat view only
   const handleSendToAgent = useCallback(
     (agent: string, prompt: string) => {
       if (!activeTab.repoPath) return;
@@ -233,54 +228,31 @@ export default function App() {
       setTabs((prev) => [...prev, agentTab]);
       setActiveTabId(tabId);
       setInnerTab("chat");
-      handleSetTerminalOpen(tabId, true);
-      setPendingAgentLaunch({ tabId, agent: resolvedAgent, prompt });
-    },
-    [activeTab, activeTabId, chatSessions, handleSetTerminalOpen]
-  );
 
-  useEffect(() => {
-    if (!pendingAgentLaunch) return;
-    if (pendingAgentLaunch.tabId !== activeTabId) return;
-    if (!isTerminalOpen) return;
-
-    let cancelled = false;
-    let timer = 0;
-    const { tabId, agent, prompt } = pendingAgentLaunch;
-
-    const launch = () => {
-      if (cancelled) return;
-      if (!terminalRef.current) {
-        timer = window.setTimeout(launch, 50);
-        return;
-      }
-
-      terminalRef.current
-        .launchSession({
-          agent,
-          prompt,
-        })
+      // Create the agent PTY directly — not through the terminal panel
+      invoke<string>("pty_create", {
+        workingDir: activeTab.repoPath,
+        command: resolvedAgent,
+      })
         .then((sessionId) => {
-          if (cancelled || !sessionId || !prompt) return;
+          if (prompt) {
+            invoke("pty_write", {
+              sessionId,
+              data: prompt + "\n",
+            }).catch(console.error);
+          }
           setChatSessions((prev) => {
             const next = new Map(prev);
             next.set(tabId, createChatSession(sessionId, prompt));
             return next;
           });
         })
-        .finally(() => {
-          setPendingAgentLaunch((current) =>
-            current?.tabId === tabId ? null : current
-          );
+        .catch((err) => {
+          console.error("Failed to create agent PTY:", err);
         });
-    };
-
-    timer = window.setTimeout(launch, 50);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [activeTabId, isTerminalOpen, pendingAgentLaunch]);
+    },
+    [activeTab, activeTabId, chatSessions]
+  );
 
   // Persist UI state to localStorage
   useEffect(() => {
@@ -307,7 +279,8 @@ export default function App() {
           // Find which tab has this session
           for (const [tabId, session] of prev) {
             if (session.id === session_id) {
-              const decoded = atob(data);
+              const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+              const decoded = new TextDecoder().decode(bytes);
               const plain = stripAnsi(decoded);
               if (!plain) return prev;
               const next = new Map(prev);
@@ -428,6 +401,10 @@ export default function App() {
       next.delete(tabId);
       return next;
     });
+    const chatSession = chatSessions.get(tabId);
+    if (chatSession) {
+      invoke("pty_destroy", { sessionId: chatSession.id }).catch(console.error);
+    }
     setChatSessions((prev) => {
       if (!prev.has(tabId)) return prev;
       const next = new Map(prev);

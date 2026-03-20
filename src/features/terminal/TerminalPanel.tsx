@@ -304,7 +304,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
         style={{ height }}
       >
         <div
-          className="h-1 cursor-row-resize border-t border-border hover:bg-accent/30 transition-colors"
+          className="h-1 cursor-row-resize border-t border-border-subtle bg-bg-raised hover:bg-accent/30 transition-colors"
           onMouseDown={handleResizeStart}
         />
         <div className="flex min-w-0 items-center gap-2 bg-bg-raised px-3 py-1.5">
