@@ -1,0 +1,5 @@
+fix conflict and finish merge
+
+---
+
+update readme for hotreload command and not hot reload command
