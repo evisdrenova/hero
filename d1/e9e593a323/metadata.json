@@ -3,7 +3,7 @@
   "checkpoint_id": "d1e9e593a323",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/features/terminal/GhosttyTerminal.tsx",
     "src/features/terminal/TerminalPanel.tsx"
@@ -15,13 +15,20 @@
       "context": "/d1/e9e593a323/0/context.md",
       "content_hash": "/d1/e9e593a323/0/content_hash.txt",
       "prompt": "/d1/e9e593a323/0/prompt.txt"
+    },
+    {
+      "metadata": "/d1/e9e593a323/1/metadata.json",
+      "transcript": "/d1/e9e593a323/1/full.jsonl",
+      "context": "/d1/e9e593a323/1/context.md",
+      "content_hash": "/d1/e9e593a323/1/content_hash.txt",
+      "prompt": "/d1/e9e593a323/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 9,
-    "cache_creation_tokens": 12008,
-    "cache_read_tokens": 122991,
-    "output_tokens": 879,
-    "api_call_count": 7
+    "input_tokens": 266,
+    "cache_creation_tokens": 404621,
+    "cache_read_tokens": 20189502,
+    "output_tokens": 72881,
+    "api_call_count": 211
   }
 }
