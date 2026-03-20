@@ -1,7 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import {
   GitBranch,
-  BookOpen,
   ChevronRight,
   ChevronDown,
   Loader2,
@@ -99,6 +98,7 @@ export function Sidebar({
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [refreshingRepoPath, setRefreshingRepoPath] = useState<string | null>(null);
   const [openDropdownRepo, setOpenDropdownRepo] = useState<string | null>(null);
+  const [openDropdownBranch, setOpenDropdownBranch] = useState<string | null>(null);
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [createDialog, setCreateDialog] = useState<CreateWorktreeDialogState | null>(null);
   const [deleteBranchDialog, setDeleteBranchDialog] = useState<DeleteBranchDialogState | null>(null);
@@ -128,18 +128,21 @@ export function Sidebar({
       .filter((r): r is RepoInfo => r !== null)
     : repos;
 
-  // Close dropdown on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
-    if (!openDropdownRepo) return;
+    if (!openDropdownRepo && !openDropdownBranch) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest("[data-repo-dropdown]")) {
+      if (openDropdownRepo && !target.closest("[data-repo-dropdown]")) {
         setOpenDropdownRepo(null);
+      }
+      if (openDropdownBranch && !target.closest("[data-branch-dropdown]")) {
+        setOpenDropdownBranch(null);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [openDropdownRepo]);
+  }, [openDropdownRepo, openDropdownBranch]);
 
   // Auto-expand repos that have matching branches when searching
   useEffect(() => {
@@ -377,7 +380,7 @@ export function Sidebar({
               className="mb-1 flex h-8 w-8 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-bg-hover hover:text-fg"
               title={repo.name}
             >
-              <BookOpen size={14} />
+              {repo.name.charAt(0).toUpperCase()}
             </button>
           ))}
         </div>
@@ -653,7 +656,6 @@ export function Sidebar({
                       ) : (
                         <ChevronRight size={14} />
                       )}
-                      <BookOpen size={14} />
                       {repo.name}
                     </button>
                     <div className="relative" data-repo-dropdown>
@@ -787,40 +789,62 @@ export function Sidebar({
                                 )}
                               </span>
                             </button>
-                            {worktree && !worktree.is_main && (
+                            <div className="relative" data-branch-dropdown>
                               <button
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  if (canDeleteWorktree) {
-                                    handleOpenDeleteDialog(repo.path, worktree);
-                                  }
+                                  const key = `${repo.path}:${branch.name}`;
+                                  setOpenDropdownBranch(openDropdownBranch === key ? null : key);
                                 }}
-                                disabled={!canDeleteWorktree}
-                                className="mr-2 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-bg-hover group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                title={
-                                  canDeleteWorktree
-                                    ? "Delete worktree"
-                                    : "Switch away from this worktree before deleting it"
-                                }
+                                className="mr-2 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-bg-hover group-hover:opacity-100"
+                                title="Branch actions"
                               >
-                                <Trash2 size={12} className="text-fg-subtle" />
+                                <MoreHorizontal size={12} className="text-fg-subtle" />
                               </button>
-                            )}
-                            {!worktree && (
-                              <button
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  if (canDeleteBranch) {
-                                    handleOpenDeleteBranchDialog(repo.path, branch.name);
-                                  }
-                                }}
-                                disabled={!canDeleteBranch}
-                                className="mr-2 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-bg-hover group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                title={deleteBranchTitle}
-                              >
-                                <Trash2 size={12} className="text-fg-subtle" />
-                              </button>
-                            )}
+                              {openDropdownBranch === `${repo.path}:${branch.name}` && (
+                                <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-border bg-bg-raised py-1 shadow-lg">
+                                  {worktree && !worktree.is_main && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenDropdownBranch(null);
+                                        if (canDeleteWorktree) {
+                                          handleOpenDeleteDialog(repo.path, worktree);
+                                        }
+                                      }}
+                                      disabled={!canDeleteWorktree}
+                                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-red hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <Trash2 size={12} />
+                                      {canDeleteWorktree
+                                        ? "Delete worktree"
+                                        : "Switch away first"}
+                                    </button>
+                                  )}
+                                  {!worktree && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenDropdownBranch(null);
+                                        if (canDeleteBranch) {
+                                          handleOpenDeleteBranchDialog(repo.path, branch.name);
+                                        }
+                                      }}
+                                      disabled={!canDeleteBranch}
+                                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-red hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                      title={deleteBranchTitle}
+                                    >
+                                      <Trash2 size={12} />
+                                      {canDeleteBranch
+                                        ? "Delete branch"
+                                        : branch.is_head
+                                          ? "Cannot delete HEAD"
+                                          : "Switch away first"}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
