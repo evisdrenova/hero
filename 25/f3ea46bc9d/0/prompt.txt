@@ -1,0 +1,1 @@
+worktree path is fixed but the white screen still an issue
