@@ -1,0 +1,1 @@
+remove the robot icon from the cehckpoitns list and use another icon like a bookmark
