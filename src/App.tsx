@@ -22,7 +22,7 @@ import {
   addUserMessage,
   type ChatSession,
 } from "./features/chat/chat-session";
-import { stripAnsi } from "./features/chat/ansi";
+import { createStreamJsonParser, type StreamJsonParser } from "./features/chat/stream-json";
 import { createBranchTab, createWorktreeTab } from "./features/repos/tab-state";
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from "./features/repos/sidebar-width.ts";
 import { planWorktreeDeletionCleanup } from "./features/repos/worktree-delete-state.ts";
@@ -105,6 +105,7 @@ export default function App() {
   );
 
   const terminalRef = useRef<TerminalPanelHandle>(null);
+  const chatParsersRef = useRef<Map<string, StreamJsonParser>>(new Map());
 
   // Load repos so we can auto-populate the initial tab
   const { data: repos } = useReposQuery();
@@ -229,23 +230,25 @@ export default function App() {
       setActiveTabId(tabId);
       setInnerTab("chat");
 
-      // Create the agent PTY directly — not through the terminal panel
+      // Create the agent PTY with stream-json output for clean parsing
       invoke<string>("pty_create", {
         workingDir: activeTab.repoPath,
         command: resolvedAgent,
+        args: ["--output-format", "stream-json"],
       })
         .then((sessionId) => {
+          chatParsersRef.current.set(sessionId, createStreamJsonParser());
+          setChatSessions((prev) => {
+            const next = new Map(prev);
+            next.set(tabId, createChatSession(sessionId, prompt));
+            return next;
+          });
           if (prompt) {
             invoke("pty_write", {
               sessionId,
               data: prompt + "\n",
             }).catch(console.error);
           }
-          setChatSessions((prev) => {
-            const next = new Map(prev);
-            next.set(tabId, createChatSession(sessionId, prompt));
-            return next;
-          });
         })
         .catch((err) => {
           console.error("Failed to create agent PTY:", err);
@@ -269,22 +272,25 @@ export default function App() {
     return () => window.removeEventListener("resize", handleWindowResize);
   }, []);
 
-  // Listen for PTY output and route to chat sessions
+  // Listen for PTY output and route to chat sessions via stream-json parser
   useEffect(() => {
     const unlisten = listen<{ session_id: string; data: string }>(
       "pty-output",
       (event) => {
         const { session_id, data } = event.payload;
+        const parser = chatParsersRef.current.get(session_id);
+        if (!parser) return; // Not a chat session
+
+        const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        const decoded = new TextDecoder().decode(bytes);
+        const text = parser.feed(decoded);
+        if (!text) return;
+
         setChatSessions((prev) => {
-          // Find which tab has this session
           for (const [tabId, session] of prev) {
             if (session.id === session_id) {
-              const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-              const decoded = new TextDecoder().decode(bytes);
-              const plain = stripAnsi(decoded);
-              if (!plain) return prev;
               const next = new Map(prev);
-              next.set(tabId, appendOutput(session, plain));
+              next.set(tabId, appendOutput(session, text));
               return next;
             }
           }
@@ -404,6 +410,7 @@ export default function App() {
     const chatSession = chatSessions.get(tabId);
     if (chatSession) {
       invoke("pty_destroy", { sessionId: chatSession.id }).catch(console.error);
+      chatParsersRef.current.delete(chatSession.id);
     }
     setChatSessions((prev) => {
       if (!prev.has(tabId)) return prev;

@@ -64,6 +64,7 @@ pub fn pty_create(
     app: AppHandle,
     working_dir: String,
     command: Option<String>,
+    args: Option<Vec<String>>,
     initial_input: Option<String>,
     state: State<'_, Mutex<PtyState>>,
 ) -> Result<String, String> {
@@ -81,12 +82,18 @@ pub fn pty_create(
     let resolved = resolve_command(command.as_deref());
 
     let mut cmd = if let Some(program) = resolved {
-        CommandBuilder::new(program)
+        let mut c = CommandBuilder::new(program);
+        if let Some(ref extra_args) = args {
+            for arg in extra_args {
+                c.arg(arg);
+            }
+        }
+        c
     } else {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut cmd = CommandBuilder::new(&shell);
-        cmd.arg("-l"); // login shell
-        cmd
+        let mut c = CommandBuilder::new(&shell);
+        c.arg("-l"); // login shell
+        c
     };
 
     cmd.cwd(&working_dir);
