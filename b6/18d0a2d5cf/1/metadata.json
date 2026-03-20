@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "b618d0a2d5cf",
+  "session_id": "1336584e-01e7-4ea6-83a2-b2582bd6d26e",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T22:37:46.378994Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/features/repos/Sidebar.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "a5a267c1028c",
+  "token_usage": {
+    "input_tokens": 5864,
+    "cache_creation_tokens": 811939,
+    "cache_read_tokens": 33888477,
+    "output_tokens": 114718,
+    "api_call_count": 349
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T22:37:45.038386Z",
+    "agent_lines": 0,
+    "human_added": 134,
+    "human_modified": 32,
+    "human_removed": 0,
+    "total_committed": 135,
+    "agent_percentage": 0
+  }
+}
