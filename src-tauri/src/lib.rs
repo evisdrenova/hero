@@ -754,18 +754,14 @@ pub fn run() {
                             let ns_view = handle.ns_view.as_ptr() as *mut AnyObject;
                             unsafe {
                                 let ns_window: *mut AnyObject = msg_send![ns_view, window];
-                                // Set the window's background color to match our app bg
+                                // Make the window background fully transparent so
+                                // rounded corners don't show a black triangle
+                                let _: () = msg_send![ns_window, setOpaque: false];
                                 let ns_color_class = objc2::runtime::AnyClass::get(
                                     c"NSColor"
                                 ).unwrap();
-                                let ns_color: *mut AnyObject = msg_send![
-                                    ns_color_class,
-                                    colorWithRed: 0.043f64
-                                    green: 0.043f64
-                                    blue: 0.051f64
-                                    alpha: 1.0f64
-                                ];
-                                let _: () = msg_send![ns_window, setBackgroundColor: ns_color];
+                                let clear_color: *mut AnyObject = msg_send![ns_color_class, clearColor];
+                                let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
                                 let _: () = msg_send![ns_window, setHasShadow: true];
                                 // Get the content view and round its corners
                                 let content_view: *mut AnyObject = msg_send![ns_window, contentView];
@@ -773,6 +769,16 @@ pub fn run() {
                                 let layer: *mut AnyObject = msg_send![content_view, layer];
                                 let _: () = msg_send![layer, setCornerRadius: 10.0f64];
                                 let _: () = msg_send![layer, setMasksToBounds: true];
+                                // Set the content view's background to the app bg color
+                                let bg_color: *mut AnyObject = msg_send![
+                                    ns_color_class,
+                                    colorWithRed: 0.043f64,
+                                    green: 0.043f64,
+                                    blue: 0.051f64,
+                                    alpha: 1.0f64
+                                ];
+                                let cg_color: *mut AnyObject = msg_send![bg_color, CGColor];
+                                let _: () = msg_send![layer, setBackgroundColor: cg_color];
                             }
                         }
                     }
