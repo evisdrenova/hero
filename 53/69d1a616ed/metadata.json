@@ -3,7 +3,7 @@
   "checkpoint_id": "5369d1a616ed",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src-tauri/src/ghostty/commands.rs",
     "src-tauri/src/ghostty/mod.rs",
@@ -23,13 +23,20 @@
       "context": "/53/69d1a616ed/1/context.md",
       "content_hash": "/53/69d1a616ed/1/content_hash.txt",
       "prompt": "/53/69d1a616ed/1/prompt.txt"
+    },
+    {
+      "metadata": "/53/69d1a616ed/2/metadata.json",
+      "transcript": "/53/69d1a616ed/2/full.jsonl",
+      "context": "/53/69d1a616ed/2/context.md",
+      "content_hash": "/53/69d1a616ed/2/content_hash.txt",
+      "prompt": "/53/69d1a616ed/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 261,
-    "cache_creation_tokens": 403167,
-    "cache_read_tokens": 19597115,
-    "output_tokens": 70049,
-    "api_call_count": 206
+    "input_tokens": 503,
+    "cache_creation_tokens": 591248,
+    "cache_read_tokens": 26764918,
+    "output_tokens": 96213,
+    "api_call_count": 324
   }
 }
