@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "d1e9e593a323",
+  "session_id": "fb6308cd-b23b-4188-9442-cd5de8551f1f",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T17:55:17.457818Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/features/terminal/GhosttyTerminal.tsx",
+    "src/features/terminal/TerminalPanel.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "59ef0b46b85b",
+  "token_usage": {
+    "input_tokens": 242,
+    "cache_creation_tokens": 188081,
+    "cache_read_tokens": 7167803,
+    "output_tokens": 26164,
+    "api_call_count": 118
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T17:55:17.191218Z",
+    "agent_lines": 0,
+    "human_added": 8,
+    "human_modified": 154,
+    "human_removed": 0,
+    "total_committed": 81,
+    "agent_percentage": 0
+  }
+}
