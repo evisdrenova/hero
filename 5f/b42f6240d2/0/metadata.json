@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "5fb42f6240d2",
+  "session_id": "055cacf9-e0e4-416f-9b6a-157967c1f20f",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T18:02:36.480641Z",
+  "branch": "hero-clean",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/config/mod.rs",
+    "src/features/checkpoints/CheckpointList.tsx",
+    "src/features/repos/Sidebar.tsx",
+    "src/features/repos/sidebar-width.ts",
+    "src/hooks/use-tauri-query.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "1298760566e9",
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 12008,
+    "cache_read_tokens": 122991,
+    "output_tokens": 879,
+    "api_call_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T18:02:36.452343Z",
+    "agent_lines": 311,
+    "human_added": 1338,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1649,
+    "agent_percentage": 18.859915100060643
+  }
+}

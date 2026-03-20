@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "5fb42f6240d2",
+  "strategy": "manual-commit",
+  "branch": "hero-clean",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/config/mod.rs",
+    "src/features/checkpoints/CheckpointList.tsx",
+    "src/features/repos/Sidebar.tsx",
+    "src/features/repos/sidebar-width.ts",
+    "src/hooks/use-tauri-query.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5f/b42f6240d2/0/metadata.json",
+      "transcript": "/5f/b42f6240d2/0/full.jsonl",
+      "context": "/5f/b42f6240d2/0/context.md",
+      "content_hash": "/5f/b42f6240d2/0/content_hash.txt",
+      "prompt": "/5f/b42f6240d2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 12008,
+    "cache_read_tokens": 122991,
+    "output_tokens": 879,
+    "api_call_count": 7
+  }
+}
