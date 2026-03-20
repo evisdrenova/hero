@@ -12,6 +12,7 @@ import {
   Search,
   Trash2,
   X,
+  MoreHorizontal,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Tab } from "../../App";
@@ -97,8 +98,8 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [refreshingRepoPath, setRefreshingRepoPath] = useState<string | null>(null);
+  const [openDropdownRepo, setOpenDropdownRepo] = useState<string | null>(null);
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const [portsCollapsed, setPortsCollapsed] = useState(true);
   const [createDialog, setCreateDialog] = useState<CreateWorktreeDialogState | null>(null);
   const [deleteBranchDialog, setDeleteBranchDialog] = useState<DeleteBranchDialogState | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteWorktreeDialogState | null>(null);
@@ -114,18 +115,31 @@ export function Sidebar({
   const searchTerm = sidebarSearch.trim().toLowerCase();
   const filteredRepos = searchTerm
     ? repos
-        .map((repo) => {
-          const repoNameMatch = repo.name.toLowerCase().includes(searchTerm);
-          const matchingBranches = repo.branches.filter((b) =>
-            b.name.toLowerCase().includes(searchTerm)
-          );
-          if (repoNameMatch || matchingBranches.length > 0) {
-            return repo;
-          }
-          return null;
-        })
-        .filter((r): r is RepoInfo => r !== null)
+      .map((repo) => {
+        const repoNameMatch = repo.name.toLowerCase().includes(searchTerm);
+        const matchingBranches = repo.branches.filter((b) =>
+          b.name.toLowerCase().includes(searchTerm)
+        );
+        if (repoNameMatch || matchingBranches.length > 0) {
+          return repo;
+        }
+        return null;
+      })
+      .filter((r): r is RepoInfo => r !== null)
     : repos;
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!openDropdownRepo) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-repo-dropdown]")) {
+        setOpenDropdownRepo(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openDropdownRepo]);
 
   // Auto-expand repos that have matching branches when searching
   useEffect(() => {
@@ -317,10 +331,10 @@ export function Sidebar({
       setDeleteDialog((current) =>
         current
           ? {
-              ...current,
-              error: message,
-              forceAvailable: current.forceAvailable || !force,
-            }
+            ...current,
+            error: message,
+            forceAvailable: current.forceAvailable || !force,
+          }
           : current
       );
     }
@@ -398,22 +412,20 @@ export function Sidebar({
                       type="button"
                       onClick={() => handleCreateModeChange("existing")}
                       disabled={createAvailableBranches.length === 0}
-                      className={`rounded border px-3 py-2 text-left text-xs transition-colors ${
-                        createDialog.mode === "existing"
-                          ? "border-accent bg-accent-bg text-accent-fg"
-                          : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
-                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                      className={`rounded border px-3 py-2 text-left text-xs transition-colors ${createDialog.mode === "existing"
+                        ? "border-accent bg-accent-bg text-accent-fg"
+                        : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       Existing branch
                     </button>
                     <button
                       type="button"
                       onClick={() => handleCreateModeChange("new")}
-                      className={`rounded border px-3 py-2 text-left text-xs transition-colors ${
-                        createDialog.mode === "new"
-                          ? "border-accent bg-accent-bg text-accent-fg"
-                          : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
-                      }`}
+                      className={`rounded border px-3 py-2 text-left text-xs transition-colors ${createDialog.mode === "new"
+                        ? "border-accent bg-accent-bg text-accent-fg"
+                        : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
+                        }`}
                     >
                       New branch
                     </button>
@@ -559,8 +571,11 @@ export function Sidebar({
   return (
     <>
       <div
-        className="flex shrink-0 flex-col border-r border-border bg-bg-raised"
+        className="flex shrink-0 flex-col border-r border-border bg-bg-raised cursor-col-resize"
+        onMouseDown={onResizeStart}
+        title="Resize repository sidebar"
         style={{ width }}
+
       >
         <div className="border-b border-border-subtle p-3">
           <div className="flex items-center gap-2">
@@ -640,51 +655,83 @@ export function Sidebar({
                       )}
                       <BookOpen size={14} />
                       {repo.name}
-                      <span className="ml-auto rounded-lg bg-bg-hover px-1.5 text-[10px] text-fg-subtle">
-                        {repo.branches.length}
-                      </span>
                     </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleOpenCreateDialog(repo);
-                      }}
-                      className="mr-1 flex h-5 w-5 items-center justify-center rounded transition-opacity hover:bg-bg-hover opacity-0 group-hover:opacity-100"
-                      title="Create worktree"
-                    >
-                      <Plus size={12} className="text-fg-subtle" />
-                    </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleRefreshRepo(repo.path);
-                      }}
-                      disabled={repoRefreshing}
-                      className={`mr-1 flex h-5 w-5 items-center justify-center rounded transition-opacity hover:bg-bg-hover ${
-                        repoRefreshing ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      } disabled:cursor-wait disabled:opacity-100`}
-                      title="Refresh repo worktrees"
-                    >
-                      {repoRefreshing ? (
-                        <Loader2 size={12} className="animate-spin text-fg-subtle" />
-                      ) : (
-                        <RefreshCw size={12} className="text-fg-subtle" />
+                    <div className="relative" data-repo-dropdown>
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenDropdownRepo(openDropdownRepo === repo.path ? null : repo.path);
+                        }}
+                        className="mr-2 flex h-5 w-5 items-center justify-center rounded transition-opacity hover:bg-bg-hover opacity-0 group-hover:opacity-100"
+                        title="Repo actions"
+                      >
+                        <MoreHorizontal size={12} className="text-fg-subtle" />
+                      </button>
+                      {openDropdownRepo === repo.path && (
+                        <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-border bg-bg-raised py-1 shadow-lg">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownRepo(null);
+                              handleOpenCreateDialog(repo);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-fg-muted hover:bg-bg-hover hover:text-fg"
+                          >
+                            <Plus size={12} />
+                            Create worktree
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownRepo(null);
+                              setCreateDialog({
+                                repoPath: repo.path,
+                                mode: "new",
+                                branchName: "",
+                                targetPath: deriveSuggestedWorktreePath(repo.path, ""),
+                                pathEdited: false,
+                                error: null,
+                              });
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-fg-muted hover:bg-bg-hover hover:text-fg"
+                          >
+                            <GitBranch size={12} />
+                            Create branch
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownRepo(null);
+                              void handleRefreshRepo(repo.path);
+                            }}
+                            disabled={repoRefreshing}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-fg-muted hover:bg-bg-hover hover:text-fg disabled:cursor-wait disabled:opacity-50"
+                          >
+                            {repoRefreshing ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={12} />
+                            )}
+                            Refresh
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDropdownRepo(null);
+                              if (repo.registered) {
+                                unregisterMutation.mutate(repo.path);
+                              } else {
+                                hideMutation.mutate(repo.path);
+                              }
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-red hover:bg-bg-hover"
+                          >
+                            <Trash2 size={12} />
+                            Remove
+                          </button>
+                        </div>
                       )}
-                    </button>
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (repo.registered) {
-                          unregisterMutation.mutate(repo.path);
-                        } else {
-                          hideMutation.mutate(repo.path);
-                        }
-                      }}
-                      className="mr-2 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-bg-hover group-hover:opacity-100"
-                      title="Remove repo"
-                    >
-                      <X size={12} className="text-fg-subtle" />
-                    </button>
+                    </div>
                   </div>
 
                   {expandedRepos.has(repo.path) && (
@@ -725,11 +772,10 @@ export function Sidebar({
                                   onBranchSelect(branch, repo.path);
                                 }
                               }}
-                              className={`flex flex-1 items-center gap-2 px-2 py-[7px] text-[13px] transition-colors ${
-                                isActive
-                                  ? "bg-accent-bg text-accent-fg"
-                                  : "text-fg-muted hover:bg-bg-hover hover:text-fg"
-                              }`}
+                              className={`flex flex-1 items-center gap-2 px-2 py-[7px] text-[13px] transition-colors ${isActive
+                                ? "bg-accent-bg text-accent-fg"
+                                : "text-fg-muted hover:bg-bg-hover hover:text-fg"
+                                }`}
                             >
                               <GitBranch size={12} />
                               <span className="truncate">{branch.name}</span>
@@ -790,35 +836,13 @@ export function Sidebar({
             </div>
           )}
 
-          <div className="mt-2 border-t border-border-subtle pt-2">
-            <button
-              onClick={() => setPortsCollapsed(!portsCollapsed)}
-              className="flex w-full items-center gap-2 px-4 py-1 text-left"
-            >
-              {portsCollapsed ? (
-                <ChevronRight size={10} className="text-fg-subtle" />
-              ) : (
-                <ChevronDown size={10} className="text-fg-subtle" />
-              )}
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-                Ports
-              </span>
-              <span className="rounded-lg bg-bg-hover px-1.5 text-[10px] text-fg-subtle">0</span>
-            </button>
-            {!portsCollapsed && (
-              <div className="px-4 py-3 text-[11px] text-fg-subtle">
-                No ports forwarded
-              </div>
-            )}
-          </div>
         </div>
       </div>
       <div
         onMouseDown={onResizeStart}
-        className="w-[3px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-accent"
+        className="shrink-0 cursor-col-resize bg-border transition-colors hover:bg-accent"
         title="Resize repository sidebar"
       />
-
       {createDialog && createRepo && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-4">
           <form
@@ -850,22 +874,20 @@ export function Sidebar({
                     type="button"
                     onClick={() => handleCreateModeChange("existing")}
                     disabled={createAvailableBranches.length === 0}
-                    className={`rounded border px-3 py-2 text-left text-xs transition-colors ${
-                      createDialog.mode === "existing"
-                        ? "border-accent bg-accent-bg text-accent-fg"
-                        : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                    className={`rounded border px-3 py-2 text-left text-xs transition-colors ${createDialog.mode === "existing"
+                      ? "border-accent bg-accent-bg text-accent-fg"
+                      : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     Existing branch
                   </button>
                   <button
                     type="button"
                     onClick={() => handleCreateModeChange("new")}
-                    className={`rounded border px-3 py-2 text-left text-xs transition-colors ${
-                      createDialog.mode === "new"
-                        ? "border-accent bg-accent-bg text-accent-fg"
-                        : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
-                    }`}
+                    className={`rounded border px-3 py-2 text-left text-xs transition-colors ${createDialog.mode === "new"
+                      ? "border-accent bg-accent-bg text-accent-fg"
+                      : "border-border bg-bg-raised text-fg-muted hover:border-border-hover hover:text-fg"
+                      }`}
                   >
                     New branch
                   </button>

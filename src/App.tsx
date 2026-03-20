@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "./features/repos/Sidebar";
 import { useReposQuery } from "./hooks/use-tauri-query";
 import { TitleBar } from "./components/TitleBar";
@@ -14,6 +15,14 @@ import { CheckpointDebugContainer } from "./features/debug/CheckpointDebugContai
 import { TerminalPanel } from "./features/terminal/TerminalPanel";
 import { PromptBar } from "./features/terminal/PromptBar";
 import type { TerminalPanelHandle } from "./features/terminal/TerminalPanel";
+import { ChatView } from "./features/chat/ChatView";
+import {
+  createChatSession,
+  appendOutput,
+  addUserMessage,
+  type ChatSession,
+} from "./features/chat/chat-session";
+import { stripAnsi } from "./features/chat/ansi";
 import { createBranchTab, createWorktreeTab } from "./features/repos/tab-state";
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from "./features/repos/sidebar-width.ts";
 import { planWorktreeDeletionCleanup } from "./features/repos/worktree-delete-state.ts";
@@ -96,6 +105,9 @@ export default function App() {
     agent: string;
     prompt: string;
   } | null>(null);
+  const [chatSessions, setChatSessions] = useState<Map<string, ChatSession>>(
+    () => new Map()
+  );
 
   const terminalRef = useRef<TerminalPanelHandle>(null);
 
@@ -106,7 +118,7 @@ export default function App() {
   useEffect(() => {
     invoke("debug_log", {
       message: `useEffect[repos]: repos=${repos ? repos.length : "null"}, first repo path=${repos?.[0]?.path ?? "none"}`,
-    }).catch(() => {});
+    }).catch(() => { });
 
     if (!repos || repos.length === 0) return;
     setTabs((prev) => {
@@ -118,7 +130,7 @@ export default function App() {
           const newBranch = headBranch?.name ?? repo.branches[0]?.name ?? "main";
           invoke("debug_log", {
             message: `Auto-populating initial tab: repoPath=${newPath}, branch=${newBranch}`,
-          }).catch(() => {});
+          }).catch(() => { });
           return {
             ...tab,
             repoPath: newPath,
@@ -190,6 +202,22 @@ export default function App() {
     (agent: string, prompt: string) => {
       if (!activeTab.repoPath) return;
 
+      // If current tab already has a chat session, send follow-up
+      const existingChat = chatSessions.get(activeTabId);
+      if (existingChat && prompt) {
+        invoke("pty_write", {
+          sessionId: existingChat.id,
+          data: prompt + "\n",
+        }).catch(console.error);
+        setChatSessions((prev) => {
+          const next = new Map(prev);
+          next.set(activeTabId, addUserMessage(existingChat, prompt));
+          return next;
+        });
+        setInnerTab("chat");
+        return;
+      }
+
       const resolvedAgent = resolveAgent(agent);
       const tabId = `agent:${resolvedAgent}:${Date.now()}`;
       const agentTab: Tab = {
@@ -204,10 +232,11 @@ export default function App() {
 
       setTabs((prev) => [...prev, agentTab]);
       setActiveTabId(tabId);
+      setInnerTab("chat");
       handleSetTerminalOpen(tabId, true);
       setPendingAgentLaunch({ tabId, agent: resolvedAgent, prompt });
     },
-    [activeTab, handleSetTerminalOpen]
+    [activeTab, activeTabId, chatSessions, handleSetTerminalOpen]
   );
 
   useEffect(() => {
@@ -217,6 +246,7 @@ export default function App() {
 
     let cancelled = false;
     let timer = 0;
+    const { tabId, agent, prompt } = pendingAgentLaunch;
 
     const launch = () => {
       if (cancelled) return;
@@ -227,12 +257,31 @@ export default function App() {
 
       terminalRef.current
         .launchSession({
-          agent: pendingAgentLaunch.agent,
-          prompt: pendingAgentLaunch.prompt,
+          agent,
+          prompt,
+        })
+        .then(() => {
+          if (cancelled) return;
+          // Find the PTY session ID from the workspace to create a chat session
+          const ws = workspaceMap.get(tabId);
+          if (ws && prompt) {
+            for (const termTab of ws.terminalTabs) {
+              for (const pane of termTab.panes) {
+                if (pane.session) {
+                  setChatSessions((prev) => {
+                    const next = new Map(prev);
+                    next.set(tabId, createChatSession(pane.session!.id, prompt));
+                    return next;
+                  });
+                  return;
+                }
+              }
+            }
+          }
         })
         .finally(() => {
           setPendingAgentLaunch((current) =>
-            current?.tabId === pendingAgentLaunch.tabId ? null : current
+            current?.tabId === tabId ? null : current
           );
         });
     };
@@ -242,7 +291,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeTabId, isTerminalOpen, pendingAgentLaunch]);
+  }, [activeTabId, isTerminalOpen, pendingAgentLaunch, workspaceMap]);
 
   // Persist UI state to localStorage
   useEffect(() => {
@@ -257,6 +306,34 @@ export default function App() {
 
     window.addEventListener("resize", handleWindowResize);
     return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
+
+  // Listen for PTY output and route to chat sessions
+  useEffect(() => {
+    const unlisten = listen<{ session_id: string; data: string }>(
+      "pty-output",
+      (event) => {
+        const { session_id, data } = event.payload;
+        setChatSessions((prev) => {
+          // Find which tab has this session
+          for (const [tabId, session] of prev) {
+            if (session.id === session_id) {
+              const decoded = atob(data);
+              const plain = stripAnsi(decoded);
+              if (!plain) return prev;
+              const next = new Map(prev);
+              next.set(tabId, appendOutput(session, plain));
+              return next;
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   // Clear selected checkpoint when switching branch tabs
@@ -355,9 +432,15 @@ export default function App() {
     }
     const closedWorkspace = workspaceMap.get(tabId);
     for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-      invoke("ghostty_destroy_surface", { surfaceId }).catch(console.error);
+      invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
     }
     setWorkspaceMap((prev) => {
+      const next = new Map(prev);
+      next.delete(tabId);
+      return next;
+    });
+    setChatSessions((prev) => {
+      if (!prev.has(tabId)) return prev;
       const next = new Map(prev);
       next.delete(tabId);
       return next;
@@ -389,7 +472,7 @@ export default function App() {
       for (const tab of tabsToRemove) {
         const closedWorkspace = next.get(tab.id);
         for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-          invoke("ghostty_destroy_surface", { surfaceId }).catch(console.error);
+          invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
         }
         next.delete(tab.id);
       }
@@ -419,7 +502,7 @@ export default function App() {
       for (const tabId of cleanup.removedTabIds) {
         const closedWorkspace = next.get(tabId);
         for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-          invoke("ghostty_destroy_surface", { surfaceId }).catch(console.error);
+          invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
         }
         next.delete(tabId);
       }
@@ -504,11 +587,10 @@ export default function App() {
                 <button
                   key={tab}
                   onClick={() => setInnerTab(tab)}
-                  className={`border-b-2 px-4 pb-2 text-xs font-medium capitalize transition-colors ${
-                    innerTab === tab
-                      ? "border-accent text-fg"
-                      : "border-transparent text-fg-subtle hover:text-fg-muted"
-                  }`}
+                  className={`border-b-2 px-4 pb-2 text-xs font-medium capitalize transition-colors ${innerTab === tab
+                    ? "border-accent text-fg"
+                    : "border-transparent text-fg-subtle hover:text-fg-muted"
+                    }`}
                 >
                   {tab === "chat"
                     ? "Chat"
@@ -526,22 +608,18 @@ export default function App() {
             {/* Main view */}
             <div className="flex flex-1 overflow-hidden bg-bg">
               {innerTab === "chat" && (
-                <div className="flex flex-1 flex-col items-center justify-center text-fg-subtle">
-                  <div className="text-center">
-                    <p className="text-lg font-medium text-fg">Chat</p>
-                    <p className="mt-1 text-sm">Agent chat will appear here</p>
-                  </div>
+                <div className="flex flex-1 overflow-hidden">
+                  <ChatView session={chatSessions.get(activeTabId) ?? null} />
                 </div>
               )}
               {innerTab === "checkpoints" && (
                 <>
                   {/* Checkpoint list — always visible when on checkpoints tab */}
                   <div
-                    className={`min-w-0 overflow-y-auto overflow-x-hidden ${
-                      selectedCheckpoint
-                        ? "w-[320px] shrink-0 border-r border-border-subtle"
-                        : "flex-1"
-                    }`}
+                    className={`min-w-0 overflow-y-auto overflow-x-hidden ${selectedCheckpoint
+                      ? "w-[320px] shrink-0 border-r border-border-subtle"
+                      : "flex-1"
+                      }`}
                   >
                     <CheckpointList
                       repoPath={activeTab.repoPath}
@@ -582,11 +660,10 @@ export default function App() {
                             <button
                               key={tab}
                               onClick={() => setCheckpointInnerTab(tab)}
-                              className={`border-b-2 px-3 pb-1.5 text-[11px] font-medium capitalize transition-colors ${
-                                checkpointInnerTab === tab
-                                  ? "border-accent text-fg"
-                                  : "border-transparent text-fg-subtle hover:text-fg-muted"
-                              }`}
+                              className={`border-b-2 px-3 pb-1.5 text-[11px] font-medium capitalize transition-colors ${checkpointInnerTab === tab
+                                ? "border-accent text-fg"
+                                : "border-transparent text-fg-subtle hover:text-fg-muted"
+                                }`}
                             >
                               {tab === "transcript"
                                 ? "Transcript"
@@ -662,14 +739,6 @@ export default function App() {
             {/* Prompt bar — always visible above terminal */}
             <PromptBar onSubmit={handleSendToAgent} />
 
-            {/* Resize handle */}
-            {isTerminalOpen && (
-              <div
-                onMouseDown={handleResizeStart}
-                className="h-0.75 shrink-0 cursor-row-resize bg-border transition-colors hover:bg-accent"
-              />
-            )}
-
             {/* Terminal panel */}
             {isTerminalOpen && (
               <TerminalPanel
@@ -680,6 +749,7 @@ export default function App() {
                 onWorkspaceChange={(update) =>
                   handleWorkspaceChange(activeTab.id, update)
                 }
+                handleResizeStart={handleResizeStart}
                 onToggle={() => handleSetTerminalOpen(activeTab.id, false)}
               />
             )}
