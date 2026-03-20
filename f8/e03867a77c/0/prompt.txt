@@ -47,3 +47,7 @@ can you use visual companion to show me
 ---
 
 looks good a few changes. instead of key files put key repos. instead of the summary at top have it be repo name then bullet points of what was done in that repo. when user clicks generate allow them to input stuff done that wasn't code relate. instead of list with left nav have it be infinte like. load last 100 days and have cool ui that shows dates to auto jump
+
+---
+
+great
