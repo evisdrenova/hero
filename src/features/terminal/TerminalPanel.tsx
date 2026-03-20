@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TerminalSquare, ChevronUp, Maximize2 } from "lucide-react";
 import { XtermTerminal } from "./XtermTerminal";
-import { getPaneChrome } from "./chrome";
 import { formatDroppedImagePaths } from "./drop-paths";
 import {
   clearPaneAutoLaunch,
@@ -206,22 +205,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     [tab.id, tab.repoPath, tab.branch, workspace, isLaunching, onWorkspaceChange]
   );
 
-  const killPaneSession = useCallback(async (terminalTabId: string, paneId: string) => {
-    const terminalTab = workspace.terminalTabs.find(
-      (candidate) => candidate.id === terminalTabId
-    );
-    const pane = terminalTab?.panes.find((candidate) => candidate.id === paneId);
-    if (!pane?.session) return;
-    try {
-      await invoke("pty_destroy", { sessionId: pane.session.id });
-    } catch (err) {
-      console.error("Failed to destroy PTY session:", err);
-    }
-    onWorkspaceChange((currentWorkspace) =>
-      setPaneSession(currentWorkspace, terminalTabId, paneId, null)
-    );
-  }, [workspace, onWorkspaceChange]);
-
   const closeTerminalTab = useCallback(async (terminalTabId: string) => {
     const terminalTab = workspace.terminalTabs.find(
       (candidate) => candidate.id === terminalTabId
@@ -392,14 +375,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           >
             {activeTerminalTab.panes.map((pane) => {
               const isActive = pane.id === activeTerminalTab.activePaneId;
-              const paneChrome = getPaneChrome(isActive);
-              const paneMeta = pane.session
-                ? isActive
-                  ? "Live"
-                  : "Attached"
-                : pane.shouldAutoLaunch
-                  ? "Starting"
-                  : "Idle";
               return (
                 <div
                   key={pane.id}
@@ -412,31 +387,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
                       : ""
                   } ${isActive ? "bg-bg-selected/30" : "bg-transparent"}`}
                 >
-                  <div className={paneChrome.rowClassName}>
-                    <div className={paneChrome.buttonClassName}>
-                      <span className={paneChrome.dotClassName} />
-                      <span className={paneChrome.titleClassName}>
-                        {pane.session?.label ?? "Terminal"}
-                      </span>
-                      <span className={paneChrome.metaClassName}>{paneMeta}</span>
-                    </div>
-                    {pane.session ? (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void killPaneSession(activeTerminalTab.id, pane.id);
-                        }}
-                        className={paneChrome.closeClassName}
-                        title="Kill session"
-                      >
-                        End
-                      </button>
-                    ) : (
-                      <span className={paneChrome.metaClassName}>
-                        {pane.shouldAutoLaunch ? "Starting terminal..." : "Terminal ready"}
-                      </span>
-                    )}
-                  </div>
                   <div className="flex-1 overflow-hidden">
                     <XtermTerminal sessionId={pane.session?.id ?? null} />
                   </div>
