@@ -24,7 +24,7 @@ function debugLog(msg: string) {
 }
 
 export interface TerminalPanelHandle {
-  launchSession: (options?: { agent?: string; prompt?: string }) => Promise<void>;
+  launchSession: (options?: { agent?: string; prompt?: string }) => Promise<string>;
 }
 
 export interface TermSession {
@@ -231,17 +231,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       async launchSession(options = {}) {
         const agent = options.agent ?? "terminal";
         const surfaceId = await launchTerminal(agent);
-        if (!surfaceId) return;
-        if (!options.prompt) return;
-
-        try {
-          await invoke("pty_write", {
-            sessionId: surfaceId,
-            data: options.prompt + "\n",
-          });
-        } catch (err) {
-          console.error("Failed to send prompt to terminal:", err);
+        if (!surfaceId) return "";
+        if (options.prompt) {
+          try {
+            await invoke("pty_write", {
+              sessionId: surfaceId,
+              data: options.prompt + "\n",
+            });
+          } catch (err) {
+            console.error("Failed to send prompt to terminal:", err);
+          }
         }
+        return surfaceId;
       },
     }), [launchTerminal]);
 

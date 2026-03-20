@@ -260,24 +260,13 @@ export default function App() {
           agent,
           prompt,
         })
-        .then(() => {
-          if (cancelled) return;
-          // Find the PTY session ID from the workspace to create a chat session
-          const ws = workspaceMap.get(tabId);
-          if (ws && prompt) {
-            for (const termTab of ws.terminalTabs) {
-              for (const pane of termTab.panes) {
-                if (pane.session) {
-                  setChatSessions((prev) => {
-                    const next = new Map(prev);
-                    next.set(tabId, createChatSession(pane.session!.id, prompt));
-                    return next;
-                  });
-                  return;
-                }
-              }
-            }
-          }
+        .then((sessionId) => {
+          if (cancelled || !sessionId || !prompt) return;
+          setChatSessions((prev) => {
+            const next = new Map(prev);
+            next.set(tabId, createChatSession(sessionId, prompt));
+            return next;
+          });
         })
         .finally(() => {
           setPendingAgentLaunch((current) =>
@@ -291,7 +280,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeTabId, isTerminalOpen, pendingAgentLaunch, workspaceMap]);
+  }, [activeTabId, isTerminalOpen, pendingAgentLaunch]);
 
   // Persist UI state to localStorage
   useEffect(() => {
