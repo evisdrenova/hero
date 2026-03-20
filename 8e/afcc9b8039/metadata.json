@@ -3,7 +3,7 @@
   "checkpoint_id": "8eafcc9b8039",
   "strategy": "manual-commit",
   "branch": "worklog",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src-tauri/src/checkpoint/mod.rs",
     "src-tauri/src/config/mod.rs",
@@ -29,13 +29,19 @@
       "transcript": "/8e/afcc9b8039/1/full.jsonl",
       "content_hash": "/8e/afcc9b8039/1/content_hash.txt",
       "prompt": "/8e/afcc9b8039/1/prompt.txt"
+    },
+    {
+      "metadata": "/8e/afcc9b8039/2/metadata.json",
+      "transcript": "/8e/afcc9b8039/2/full.jsonl",
+      "content_hash": "/8e/afcc9b8039/2/content_hash.txt",
+      "prompt": "/8e/afcc9b8039/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 45,
-    "cache_creation_tokens": 99918,
-    "cache_read_tokens": 1596779,
-    "output_tokens": 14395,
-    "api_call_count": 33
+    "input_tokens": 2961,
+    "cache_creation_tokens": 144734,
+    "cache_read_tokens": 2080860,
+    "output_tokens": 21573,
+    "api_call_count": 47
   }
 }
