@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "db23acd89a64",
+  "session_id": "d11a93ad-5662-4b33-8197-b07eeabce9fe",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T18:04:12.274757Z",
+  "branch": "worklog",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/journal/generate.rs",
+    "src-tauri/src/journal/github.rs",
+    "src-tauri/src/lib.rs",
+    "src/App.tsx",
+    "src/components/TitleBar.tsx",
+    "src/features/dashboard/DashboardView.tsx",
+    "src/features/dashboard/DateJumper.tsx",
+    "src/features/dashboard/GenerateDialog.tsx",
+    "src/features/dashboard/JournalDayCard.tsx",
+    "src/features/dashboard/JournalFeed.tsx",
+    "src/features/dashboard/RepoSection.tsx",
+    "src/hooks/use-tauri-query.ts",
+    "src/lib/ipc.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "8cbbc4e34f38",
+  "token_usage": {
+    "input_tokens": 173,
+    "cache_creation_tokens": 296803,
+    "cache_read_tokens": 7084167,
+    "output_tokens": 58396,
+    "api_call_count": 82
+  },
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T18:04:11.81946Z",
+    "agent_lines": 1134,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1134,
+    "agent_percentage": 100
+  }
+}
