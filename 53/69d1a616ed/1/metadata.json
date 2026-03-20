@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "5369d1a616ed",
+  "session_id": "1336584e-01e7-4ea6-83a2-b2582bd6d26e",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-20T17:47:49.413718Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/ghostty/commands.rs",
+    "src-tauri/src/ghostty/mod.rs",
+    "src-tauri/src/lib.rs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "064bd3885ff3",
+  "token_usage": {
+    "input_tokens": 252,
+    "cache_creation_tokens": 391159,
+    "cache_read_tokens": 19474124,
+    "output_tokens": 69170,
+    "api_call_count": 199
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-20T17:47:48.684508Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 11,
+    "human_removed": 1054,
+    "total_committed": 51,
+    "agent_percentage": 0
+  }
+}
