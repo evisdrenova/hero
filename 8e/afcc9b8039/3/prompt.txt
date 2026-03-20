@@ -1,0 +1,5 @@
+commit
+
+---
+
+great but work journal should not be repo specific
