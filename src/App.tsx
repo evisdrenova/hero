@@ -250,6 +250,7 @@ export default function App() {
       setInnerTab("chat");
 
       // Spawn agent with -p flag — prompt is passed as an argument
+      console.log("[chat] agent_create:", resolvedAgent, "prompt:", prompt, "cwd:", activeTab.repoPath);
       invoke<string>("agent_create", {
         workingDir: activeTab.repoPath,
         command: resolvedAgent,
@@ -257,6 +258,7 @@ export default function App() {
         args: ["--output-format", "stream-json"],
       })
         .then((sessionId) => {
+          console.log("[chat] agent_create returned sessionId:", sessionId);
           chatParsersRef.current.set(sessionId, createStreamJsonParser());
           setChatSessions((prev) => {
             const next = new Map(prev);
@@ -265,7 +267,7 @@ export default function App() {
           });
         })
         .catch((err) => {
-          console.error("Failed to create agent:", err);
+          console.error("[chat] agent_create FAILED:", err);
         });
     },
     [activeTab, activeTabId, chatSessions]
@@ -288,15 +290,25 @@ export default function App() {
 
   // Listen for agent output (line-delimited JSON) and route to chat sessions
   useEffect(() => {
+    let eventCount = 0;
     const unlisten = listen<{ session_id: string; data: string }>(
       "agent-output",
       (event) => {
+        eventCount++;
         const { session_id, data } = event.payload;
+        if (eventCount <= 10) {
+          console.log(`[chat] agent-output #${eventCount} session=${session_id} data=${data.slice(0, 200)}`);
+        }
         const parser = chatParsersRef.current.get(session_id);
-        if (!parser) return;
+        if (!parser) {
+          console.warn(`[chat] No parser for session ${session_id}, registered:`, [...chatParsersRef.current.keys()]);
+          return;
+        }
 
-        // Each event is one line of JSON — feed it with a newline so the parser processes it
         const text = parser.feed(data + "\n");
+        if (eventCount <= 10) {
+          console.log(`[chat] parsed text: "${text.slice(0, 200)}"`);
+        }
         if (!text) return;
 
         setChatSessions((prev) => {
@@ -307,13 +319,22 @@ export default function App() {
               return next;
             }
           }
+          console.warn(`[chat] No chat session found for agent session ${session_id}`);
           return prev;
         });
       }
     );
 
+    const unlistenDone = listen<{ session_id: string; exit_code: number | null }>(
+      "agent-done",
+      (event) => {
+        console.log(`[chat] agent-done session=${event.payload.session_id} exit=${event.payload.exit_code}`);
+      }
+    );
+
     return () => {
       unlisten.then((fn) => fn());
+      unlistenDone.then((fn) => fn());
     };
   }, []);
 
