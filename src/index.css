@@ -1,0 +1,276 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0d0d0d;
+  --color-bg-raised: #111111;
+  --color-bg-overlay: #141414;
+  --color-bg-hover: #1a1a1a;
+  --color-bg-active: #1c1c2e;
+
+  --color-border: #222222;
+  --color-border-subtle: #1a1a1a;
+  --color-border-hover: #333333;
+
+  --color-fg: #e4e4e7;
+  --color-fg-muted: #888888;
+  --color-fg-subtle: #555555;
+  --color-fg-faint: #333333;
+
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-fg: #a78bfa;
+  --color-accent-bg: #1a1528;
+
+  --color-green: #4ade80;
+  --color-green-bg: #1a2e1a;
+  --color-red: #f87171;
+  --color-red-bg: #2e1a1a;
+  --color-yellow: #fbbf24;
+  --color-yellow-bg: #2e2a1a;
+  --color-blue: #60a5fa;
+  --color-blue-bg: #1a2238;
+
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+/* Dark theme (default) */
+:root,
+[data-theme="dark"] {
+  --color-bg: #0d0d0d;
+  --color-bg-raised: #111111;
+  --color-bg-overlay: #141414;
+  --color-bg-hover: #1a1a1a;
+  --color-bg-active: #1c1c2e;
+
+  --color-border: #222222;
+  --color-border-subtle: #1a1a1a;
+  --color-border-hover: #333333;
+
+  --color-fg: #e4e4e7;
+  --color-fg-muted: #888888;
+  --color-fg-subtle: #555555;
+  --color-fg-faint: #333333;
+
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-fg: #a78bfa;
+  --color-accent-bg: #1a1528;
+
+  --color-green: #4ade80;
+  --color-green-bg: #1a2e1a;
+  --color-red: #f87171;
+  --color-red-bg: #2e1a1a;
+  --color-yellow: #fbbf24;
+  --color-yellow-bg: #2e2a1a;
+  --color-blue: #60a5fa;
+  --color-blue-bg: #1a2238;
+
+  --color-diff-add-bg: rgba(74, 222, 128, 0.08);
+  --color-diff-delete-bg: rgba(248, 113, 113, 0.08);
+  --color-diff-add-gutter: rgba(74, 222, 128, 0.15);
+  --color-diff-delete-gutter: rgba(248, 113, 113, 0.15);
+  --color-diff-add-text: #22c55e;
+  --color-diff-delete-text: #ef4444;
+  --color-diff-hunk-bg: rgba(167, 139, 250, 0.12);
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-bg-raised: #f8f8fa;
+  --color-bg-overlay: #f0f0f2;
+  --color-bg-hover: #e8e8eb;
+  --color-bg-active: #e8e6f0;
+
+  --color-border: #d4d4d8;
+  --color-border-subtle: #e4e4e7;
+  --color-border-hover: #a1a1aa;
+
+  --color-fg: #18181b;
+  --color-fg-muted: #52525b;
+  --color-fg-subtle: #a1a1aa;
+  --color-fg-faint: #d4d4d8;
+
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-fg: #6d28d9;
+  --color-accent-bg: #ede9fe;
+
+  --color-green: #16a34a;
+  --color-green-bg: #f0fdf4;
+  --color-red: #dc2626;
+  --color-red-bg: #fef2f2;
+  --color-yellow: #ca8a04;
+  --color-yellow-bg: #fefce8;
+  --color-blue: #2563eb;
+  --color-blue-bg: #eff6ff;
+
+  --color-diff-add-bg: #dcfce7;
+  --color-diff-delete-bg: #fee2e2;
+  --color-diff-add-gutter: #bbf7d0;
+  --color-diff-delete-gutter: #fecaca;
+  --color-diff-add-text: #166534;
+  --color-diff-delete-text: #b91c1c;
+  --color-diff-hunk-bg: #ede9fe;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-fg-faint);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fg-subtle);
+}
+
+/* Terminal cursor blink */
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Markdown prose styling for transcript messages */
+.prose-transcript {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-fg-muted);
+}
+.prose-transcript h1,
+.prose-transcript h2,
+.prose-transcript h3,
+.prose-transcript h4 {
+  color: var(--color-fg);
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+.prose-transcript h1 { font-size: 1.25em; }
+.prose-transcript h2 { font-size: 1.1em; }
+.prose-transcript h3 { font-size: 1em; }
+.prose-transcript h4 { font-size: 0.95em; }
+.prose-transcript h1:first-child,
+.prose-transcript h2:first-child,
+.prose-transcript h3:first-child {
+  margin-top: 0;
+}
+.prose-transcript p {
+  margin: 0.5em 0;
+}
+.prose-transcript p:first-child {
+  margin-top: 0;
+}
+.prose-transcript p:last-child {
+  margin-bottom: 0;
+}
+.prose-transcript strong {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+.prose-transcript em {
+  font-style: italic;
+}
+.prose-transcript a {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-transcript code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.15em 0.35em;
+  background: var(--color-bg-hover);
+  border-radius: 4px;
+  color: var(--color-fg);
+}
+.prose-transcript pre {
+  margin: 0.75em 0;
+  padding: 0.75em 1em;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.prose-transcript pre code {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: inherit;
+  color: var(--color-fg-muted);
+}
+.prose-transcript ul,
+.prose-transcript ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.prose-transcript li {
+  margin: 0.25em 0;
+}
+.prose-transcript li::marker {
+  color: var(--color-fg-subtle);
+}
+.prose-transcript blockquote {
+  margin: 0.75em 0;
+  padding: 0.25em 0 0.25em 1em;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-fg-subtle);
+}
+.prose-transcript hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.prose-transcript table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+.prose-transcript th,
+.prose-transcript td {
+  padding: 0.4em 0.75em;
+  border: 1px solid var(--color-border-subtle);
+  text-align: left;
+}
+.prose-transcript th {
+  background: var(--color-bg-hover);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+.prose-transcript img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+/* Pulse animation for active indicators */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

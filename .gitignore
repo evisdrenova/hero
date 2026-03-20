@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+
+# Tauri
+src-tauri/target/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Superpowers brainstorm files
+.superpowers/
+
+# Vendored binary (downloaded at setup, not stored in git)
+src-tauri/vendor/ghostty/libghostty.a
