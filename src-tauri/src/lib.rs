@@ -857,7 +857,6 @@ pub fn run() {
             pty::pty_resize,
             pty::pty_destroy,
             agent::agent_create,
-            agent::agent_write,
             agent::agent_destroy,
         ])
         .run(tauri::generate_context!())

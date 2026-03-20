@@ -201,16 +201,35 @@ export default function App() {
       // If current tab already has a chat session, send follow-up
       const existingChat = chatSessions.get(activeTabId);
       if (existingChat && prompt) {
-        invoke("agent_write", {
-          sessionId: existingChat.id,
-          data: prompt + "\n",
-        }).catch(console.error);
+        // Flush pending text, add user message
         setChatSessions((prev) => {
           const next = new Map(prev);
           next.set(activeTabId, addUserMessage(existingChat, prompt));
           return next;
         });
         setInnerTab("chat");
+
+        // Spawn a new agent process for the follow-up
+        const resolvedFollowUp = resolveAgent(agent);
+        invoke<string>("agent_create", {
+          workingDir: activeTab.repoPath,
+          command: resolvedFollowUp,
+          prompt,
+          args: ["--output-format", "stream-json"],
+        })
+          .then((sessionId) => {
+            chatParsersRef.current.set(sessionId, createStreamJsonParser());
+            // Update the chat session to use the new agent session ID
+            setChatSessions((prev) => {
+              const next = new Map(prev);
+              const current = next.get(activeTabId);
+              if (current) {
+                next.set(activeTabId, { ...current, id: sessionId, isStreaming: true });
+              }
+              return next;
+            });
+          })
+          .catch(console.error);
         return;
       }
 
@@ -230,10 +249,11 @@ export default function App() {
       setActiveTabId(tabId);
       setInnerTab("chat");
 
-      // Spawn agent as a piped process (not PTY) so --output-format works
+      // Spawn agent with -p flag — prompt is passed as an argument
       invoke<string>("agent_create", {
         workingDir: activeTab.repoPath,
         command: resolvedAgent,
+        prompt,
         args: ["--output-format", "stream-json"],
       })
         .then((sessionId) => {
@@ -243,12 +263,6 @@ export default function App() {
             next.set(tabId, createChatSession(sessionId, prompt));
             return next;
           });
-          if (prompt) {
-            invoke("agent_write", {
-              sessionId,
-              data: prompt + "\n",
-            }).catch(console.error);
-          }
         })
         .catch((err) => {
           console.error("Failed to create agent:", err);

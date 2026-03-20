@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -10,12 +10,17 @@ use tauri::{AppHandle, Emitter, State};
 #[derive(Clone, serde::Serialize)]
 pub struct AgentOutputPayload {
     pub session_id: String,
-    /// A single line of JSON from the agent's stdout.
+    /// A single line from the agent's stdout.
     pub data: String,
 }
 
+/// Payload emitted when the agent process exits.
+#[derive(Clone, serde::Serialize)]
+pub struct AgentDonePayload {
+    pub session_id: String,
+}
+
 struct AgentSession {
-    stdin: std::process::ChildStdin,
     child: Child,
 }
 
@@ -46,13 +51,15 @@ fn resolve_command(command: &str) -> &str {
     }
 }
 
-/// Spawn an agent process with piped stdin/stdout (not a PTY).
-/// This ensures --output-format flags are respected (no TTY detection).
+/// Spawn an agent process with `-p` flag.
+/// The prompt is passed as a trailing argument — the process outputs to stdout and exits.
+/// No stdin interaction needed.
 #[tauri::command]
 pub fn agent_create(
     app: AppHandle,
     working_dir: String,
     command: String,
+    prompt: String,
     args: Option<Vec<String>>,
     state: State<'_, Mutex<AgentState>>,
 ) -> Result<String, String> {
@@ -60,29 +67,36 @@ pub fn agent_create(
 
     let mut cmd = Command::new(program);
     cmd.current_dir(&working_dir);
-    cmd.stdin(Stdio::piped());
+    cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::null());
+    cmd.stderr(Stdio::piped());
 
+    // Add -p flag for non-interactive print mode
+    cmd.arg("-p");
+
+    // Add extra args (e.g., --output-format stream-json)
     if let Some(ref extra_args) = args {
         for arg in extra_args {
             cmd.arg(arg);
         }
     }
 
+    // The prompt is the last argument
+    cmd.arg(&prompt);
+
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn agent: {}", e))?;
-
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "Failed to capture agent stdin".to_string())?;
 
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| "Failed to capture agent stdout".to_string())?;
+
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture agent stderr".to_string())?;
 
     let session_id = generate_session_id();
 
@@ -95,7 +109,7 @@ pub fn agent_create(
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 match line {
-                    Ok(text) => {
+                    Ok(text) if !text.is_empty() => {
                         let _ = app_handle.emit(
                             "agent-output",
                             AgentOutputPayload {
@@ -104,6 +118,35 @@ pub fn agent_create(
                             },
                         );
                     }
+                    Ok(_) => {} // skip empty lines
+                    Err(_) => break,
+                }
+            }
+            let _ = app_handle.emit("agent-done", AgentDonePayload {
+                session_id: id,
+            });
+        });
+    }
+
+    // Stream stderr as errors
+    {
+        let id = session_id.clone();
+        let app_handle = app.clone();
+
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) if !text.is_empty() => {
+                        let _ = app_handle.emit(
+                            "agent-output",
+                            AgentOutputPayload {
+                                session_id: id.clone(),
+                                data: format!("{{\"type\":\"error\",\"error\":{{\"message\":\"{}\"}}}}", text.replace('\"', "\\\"").replace('\\', "\\\\")),
+                            },
+                        );
+                    }
+                    Ok(_) => {}
                     Err(_) => break,
                 }
             }
@@ -113,35 +156,10 @@ pub fn agent_create(
     let mut state = state.lock().map_err(|_| "State lock error".to_string())?;
     state.sessions.insert(
         session_id.clone(),
-        AgentSession { stdin, child },
+        AgentSession { child },
     );
 
     Ok(session_id)
-}
-
-/// Write data to an agent's stdin.
-#[tauri::command]
-pub fn agent_write(
-    session_id: String,
-    data: String,
-    state: State<'_, Mutex<AgentState>>,
-) -> Result<(), String> {
-    let mut state = state.lock().map_err(|_| "State lock error".to_string())?;
-    let session = state
-        .sessions
-        .get_mut(&session_id)
-        .ok_or_else(|| format!("Agent session not found: {}", session_id))?;
-
-    session
-        .stdin
-        .write_all(data.as_bytes())
-        .map_err(|e| format!("Write failed: {}", e))?;
-    session
-        .stdin
-        .flush()
-        .map_err(|e| format!("Flush failed: {}", e))?;
-
-    Ok(())
 }
 
 /// Destroy an agent session — kills the child process.
