@@ -1,3 +1,4 @@
+mod agent;
 mod checkpoint;
 mod config;
 mod git;
@@ -741,6 +742,7 @@ pub fn run() {
             watched_repos: HashSet::new(),
         }))
         .manage(Mutex::new(pty::PtyState::new()))
+        .manage(Mutex::new(agent::AgentState::new()))
         .setup(|app| {
             // Round the window corners on macOS (decorations: false)
             {
@@ -854,6 +856,9 @@ pub fn run() {
             pty::pty_write,
             pty::pty_resize,
             pty::pty_destroy,
+            agent::agent_create,
+            agent::agent_write,
+            agent::agent_destroy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

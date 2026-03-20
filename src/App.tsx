@@ -201,7 +201,7 @@ export default function App() {
       // If current tab already has a chat session, send follow-up
       const existingChat = chatSessions.get(activeTabId);
       if (existingChat && prompt) {
-        invoke("pty_write", {
+        invoke("agent_write", {
           sessionId: existingChat.id,
           data: prompt + "\n",
         }).catch(console.error);
@@ -230,8 +230,8 @@ export default function App() {
       setActiveTabId(tabId);
       setInnerTab("chat");
 
-      // Create the agent PTY with stream-json output for clean parsing
-      invoke<string>("pty_create", {
+      // Spawn agent as a piped process (not PTY) so --output-format works
+      invoke<string>("agent_create", {
         workingDir: activeTab.repoPath,
         command: resolvedAgent,
         args: ["--output-format", "stream-json"],
@@ -244,14 +244,14 @@ export default function App() {
             return next;
           });
           if (prompt) {
-            invoke("pty_write", {
+            invoke("agent_write", {
               sessionId,
               data: prompt + "\n",
             }).catch(console.error);
           }
         })
         .catch((err) => {
-          console.error("Failed to create agent PTY:", err);
+          console.error("Failed to create agent:", err);
         });
     },
     [activeTab, activeTabId, chatSessions]
@@ -272,18 +272,17 @@ export default function App() {
     return () => window.removeEventListener("resize", handleWindowResize);
   }, []);
 
-  // Listen for PTY output and route to chat sessions via stream-json parser
+  // Listen for agent output (line-delimited JSON) and route to chat sessions
   useEffect(() => {
     const unlisten = listen<{ session_id: string; data: string }>(
-      "pty-output",
+      "agent-output",
       (event) => {
         const { session_id, data } = event.payload;
         const parser = chatParsersRef.current.get(session_id);
-        if (!parser) return; // Not a chat session
+        if (!parser) return;
 
-        const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-        const decoded = new TextDecoder().decode(bytes);
-        const text = parser.feed(decoded);
+        // Each event is one line of JSON — feed it with a newline so the parser processes it
+        const text = parser.feed(data + "\n");
         if (!text) return;
 
         setChatSessions((prev) => {
@@ -409,7 +408,7 @@ export default function App() {
     });
     const chatSession = chatSessions.get(tabId);
     if (chatSession) {
-      invoke("pty_destroy", { sessionId: chatSession.id }).catch(console.error);
+      invoke("agent_destroy", { sessionId: chatSession.id }).catch(console.error);
       chatParsersRef.current.delete(chatSession.id);
     }
     setChatSessions((prev) => {
