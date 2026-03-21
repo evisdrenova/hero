@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "7584b66f8122",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "src-tauri/src/ghostty/mod.rs",
+    "src-tauri/src/ghostty/overlay.rs",
+    "src/App.tsx",
+    "src/components/FindBar.tsx",
+    "src/components/SearchableContainer.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/75/84b66f8122/0/metadata.json",
+      "transcript": "/75/84b66f8122/0/full.jsonl",
+      "content_hash": "/75/84b66f8122/0/content_hash.txt",
+      "prompt": "/75/84b66f8122/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2514,
+    "cache_creation_tokens": 199949,
+    "cache_read_tokens": 20981554,
+    "output_tokens": 67011,
+    "api_call_count": 162
+  }
+}
