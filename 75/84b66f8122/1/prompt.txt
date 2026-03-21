@@ -1,0 +1,8 @@
+<task-notification>
+<task-id>bylxwoho4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-alisha-Projects-entire-app/08cef056-2b2b-4c62-b3bd-793013b5aa11/tasks/bylxwoho4.output</output-file>
+<status>killed</status>
+<summary>Background command "Build via tauri CLI (with asset embedding)" was stopped</summary>
+</task-notification>
+Read the output file to retrieve the result: /private/tmp/claude-501/-Users-alisha-Projects-entire-app/08cef056-2b2b-4c62-b3bd-793013b5aa11/tasks/bylxwoho4.output
