@@ -105,6 +105,15 @@ fn list_checkpoints(
 }
 
 #[tauri::command]
+fn get_diff_stats(
+    repo_path: String,
+    commit_sha: String,
+) -> Result<(u32, u32), String> {
+    let repo = git::open_repo(&repo_path)?;
+    Ok(checkpoint::compute_diff_stats(&repo, &commit_sha))
+}
+
+#[tauri::command]
 fn get_transcript(
     repo_path: String,
     checkpoint_id: String,
@@ -840,6 +849,7 @@ pub fn run() {
             delete_worktree,
             delete_branch,
             list_checkpoints,
+            get_diff_stats,
             get_transcript,
             get_checkpoint_diff,
             run_checkpoint_semantic_review,

@@ -155,7 +155,7 @@ pub fn list_checkpoints(
 
 fn build_checkpoint_summary(
     repo: &Repository,
-    _tree: &git2::Tree,
+    tree: &git2::Tree,
     dir: &str,
     meta: &RawCheckpointMetadata,
 ) -> Result<CheckpointSummary, String> {
@@ -173,7 +173,7 @@ fn build_checkpoint_summary(
             let session_meta_path = format!("{}metadata.json", session_dir);
 
             // Try to read session metadata from the tree
-            if let Ok(session_meta) = read_blob_from_tree(repo, &session_meta_path) {
+            if let Ok(session_meta) = read_blob_from_tree(repo, tree, &session_meta_path) {
                 if let Ok(sm) = serde_json::from_str::<RawSessionMetadata>(&session_meta) {
                     // Track earliest created_at across sessions
                     if let Some(ref ca) = sm.created_at {
@@ -182,8 +182,9 @@ fn build_checkpoint_summary(
                         }
                     }
 
-                    // Count steps from transcript if available
-                    let step_count = count_transcript_steps(repo, session_ref, &session_dir);
+                    // Defer transcript step counting — expensive, done on demand
+                    let step_count = 0;
+                    let _ = session_ref; // suppress unused warning
 
                     sessions.push(SessionSummary {
                         session_id: sm.session_id.unwrap_or_default(),
@@ -208,22 +209,12 @@ fn build_checkpoint_summary(
 
     let branch_name = meta.branch.clone().unwrap_or_default();
 
-    // Resolve commit_sha and commit_message from the branch's git history
-    // The checkpoint corresponds to the most recent commit on the branch at created_at time
-    let (commit_sha, commit_message) = meta
-        .commit_sha
-        .clone()
-        .filter(|s| !s.is_empty())
-        .map(|sha| {
-            let msg = meta.commit_message.clone().unwrap_or_default();
-            (sha, msg)
-        })
-        .unwrap_or_else(|| {
-            resolve_commit_from_branch(repo, &branch_name, &created_at)
-                .unwrap_or_default()
-        });
+    // Use commit info from metadata directly — skip expensive revwalk/diff for listing
+    let commit_sha = meta.commit_sha.clone().unwrap_or_default();
+    let commit_message = meta.commit_message.clone().unwrap_or_default();
 
-    let (additions, deletions) = compute_diff_stats(repo, &commit_sha);
+    // Defer diff stats — will be computed on demand when a checkpoint is selected
+    let (additions, deletions) = (0, 0);
 
     Ok(CheckpointSummary {
         checkpoint_id,
@@ -326,7 +317,7 @@ fn parse_iso_timestamp(s: &str) -> Option<i64> {
 }
 
 /// Compute additions and deletions for a commit by diffing against its parent.
-fn compute_diff_stats(repo: &Repository, commit_sha: &str) -> (u32, u32) {
+pub fn compute_diff_stats(repo: &Repository, commit_sha: &str) -> (u32, u32) {
     let oid = match git2::Oid::from_str(commit_sha) {
         Ok(o) => o,
         Err(_) => return (0, 0),
@@ -353,6 +344,7 @@ fn compute_diff_stats(repo: &Repository, commit_sha: &str) -> (u32, u32) {
 
 fn count_transcript_steps(
     repo: &Repository,
+    tree: &git2::Tree,
     session_ref: &RawSessionRef,
     session_dir: &str,
 ) -> u32 {
@@ -370,7 +362,7 @@ fn count_transcript_steps(
         })
         .unwrap_or_else(|| format!("{}full.jsonl", session_dir));
 
-    if let Ok(content) = read_blob_from_tree(repo, &transcript_path) {
+    if let Ok(content) = read_blob_from_tree(repo, tree, &transcript_path) {
         session::read_transcript(&content)
             .into_iter()
             .filter(|message| message.role == "assistant")
@@ -380,20 +372,7 @@ fn count_transcript_steps(
     }
 }
 
-fn read_blob_from_tree(repo: &Repository, path: &str) -> Result<String, String> {
-    let branch_ref = repo
-        .find_branch("entire/checkpoints/v1", git2::BranchType::Local)
-        .map_err(|e| format!("No checkpoint branch: {}", e))?;
-
-    let commit = branch_ref
-        .get()
-        .peel_to_commit()
-        .map_err(|e| format!("Failed to peel: {}", e))?;
-
-    let tree = commit
-        .tree()
-        .map_err(|e| format!("Failed to get tree: {}", e))?;
-
+fn read_blob_from_tree(repo: &Repository, tree: &git2::Tree, path: &str) -> Result<String, String> {
     let entry = tree
         .get_path(std::path::Path::new(path))
         .map_err(|e| format!("Path not found: {}", e))?;
