@@ -33,6 +33,8 @@ import { deriveSuggestedWorktreePath } from "./worktree-paths.ts";
 interface SidebarProps {
   activeTab: Tab;
   width: number;
+  busyTabIds: Set<string>;
+  tabs: Tab[];
   onBranchSelect: (branch: BranchInfo, repoPath: string) => void;
   onBranchDeleted: (branchName: string, repoPath: string) => void;
   onWorktreeDeleted: (worktreePath: string) => void;
@@ -76,6 +78,8 @@ function getAvailableExistingBranches(repo: RepoInfo): string[] {
 export function Sidebar({
   activeTab,
   width,
+  busyTabIds,
+  tabs,
   onBranchSelect,
   onBranchDeleted,
   onWorktreeDeleted,
@@ -104,17 +108,6 @@ export function Sidebar({
   const [deleteBranchDialog, setDeleteBranchDialog] = useState<DeleteBranchDialogState | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteWorktreeDialogState | null>(null);
 
-  // Drag-and-drop reorder state
-  const [repoOrder, setRepoOrder] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem("entire:repo-order");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [draggedRepo, setDraggedRepo] = useState<string | null>(null);
-  const [dragOverRepo, setDragOverRepo] = useState<string | null>(null);
 
   const createRepo = createDialog
     ? repos.find((repo) => repo.path === createDialog.repoPath) ?? null
@@ -125,7 +118,7 @@ export function Sidebar({
   );
 
   const searchTerm = sidebarSearch.trim().toLowerCase();
-  const unsortedFilteredRepos = searchTerm
+  const filteredRepos = searchTerm
     ? repos
       .map((repo) => {
         const repoNameMatch = repo.name.toLowerCase().includes(searchTerm);
@@ -139,28 +132,6 @@ export function Sidebar({
       })
       .filter((r): r is RepoInfo => r !== null)
     : repos;
-
-  // Sort repos by stored order (repos not in the order list go to the end)
-  const filteredRepos = [...unsortedFilteredRepos].sort((a, b) => {
-    const ai = repoOrder.indexOf(a.path);
-    const bi = repoOrder.indexOf(b.path);
-    if (ai === -1 && bi === -1) return 0;
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
-
-  function handleRepoReorder(fromPath: string, toPath: string) {
-    if (fromPath === toPath) return;
-    const paths = filteredRepos.map((r) => r.path);
-    const fromIdx = paths.indexOf(fromPath);
-    const toIdx = paths.indexOf(toPath);
-    if (fromIdx === -1 || toIdx === -1) return;
-    paths.splice(fromIdx, 1);
-    paths.splice(toIdx, 0, fromPath);
-    setRepoOrder(paths);
-    localStorage.setItem("entire:repo-order", JSON.stringify(paths));
-  }
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -679,32 +650,7 @@ export function Sidebar({
               const repoRefreshing = isRepoRefreshing(refreshingRepoPath, repo.path);
 
               return (
-                <div
-                  key={repo.path}
-                  draggable
-                  onDragStart={(e) => {
-                    setDraggedRepo(repo.path);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    setDragOverRepo(repo.path);
-                  }}
-                  onDragLeave={() => setDragOverRepo(null)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (draggedRepo) handleRepoReorder(draggedRepo, repo.path);
-                    setDraggedRepo(null);
-                    setDragOverRepo(null);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedRepo(null);
-                    setDragOverRepo(null);
-                  }}
-                  className={dragOverRepo === repo.path && draggedRepo !== repo.path ? "border-t-2 border-accent" : ""}
-                  style={{ opacity: draggedRepo === repo.path ? 0.4 : 1 }}
-                >
+                <div key={repo.path}>
                   <div className="group flex items-center transition-colors hover:bg-bg-hover">
                     <button
                       onClick={() => toggleRepo(repo.path)}
@@ -715,7 +661,7 @@ export function Sidebar({
                       ) : (
                         <ChevronRight size={14} />
                       )}
-                      {repo.name}
+                      <span className="truncate" style={{ maxWidth: 300 }}>{repo.name}</span>
                     </button>
                     <div className="relative" data-repo-dropdown>
                       <button
@@ -823,6 +769,13 @@ export function Sidebar({
                             ? "Switch away from this branch before deleting it"
                             : "Delete branch";
 
+                        const isBranchBusy = tabs.some(
+                          (t) =>
+                            busyTabIds.has(t.id) &&
+                            t.branch === branch.name &&
+                            t.repoPath === (worktree?.path ?? repo.path)
+                        );
+
                         return (
                           <div key={branch.name} className={`group flex items-center transition-colors ${isActive
                                 ? "bg-accent-bg"
@@ -842,8 +795,15 @@ export function Sidebar({
                                 }`}
                             >
                               <GitBranch size={12} />
-                              <span className="truncate">{branch.name}</span>
+                              <span className="truncate" style={{ maxWidth: 300 }}>{branch.name}</span>
                               <span className="ml-auto flex items-center gap-1.5">
+                                {isBranchBusy && (
+                                  <span
+                                    className="h-[6px] w-[6px] rounded-full bg-orange-400"
+                                    style={{ animation: "pulse 1.5s ease-in-out infinite" }}
+                                    title="Agent is working"
+                                  />
+                                )}
                                 {isWorktree && (
                                   <span className="rounded bg-green-bg px-1.5 py-0.5 text-[9px] font-medium text-green">
                                     Ready

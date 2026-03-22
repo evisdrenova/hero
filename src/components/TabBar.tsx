@@ -5,9 +5,11 @@ import type { Tab } from "../App";
 interface TabBarProps {
   tabs: Tab[];
   activeTabId: string;
+  busyTabIds: Set<string>;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
   onAddAgentTab?: (agent: string) => void;
+  onAddParallelAgent?: (agent: string) => void;
 }
 
 const AGENT_OPTIONS = ["claude", "codex", "gemini", "cursor"] as const;
@@ -24,9 +26,11 @@ function agentDisplayName(agent: string | null): string | null {
 export function TabBar({
   tabs,
   activeTabId,
+  busyTabIds,
   onSelectTab,
   onCloseTab,
   onAddAgentTab,
+  onAddParallelAgent,
 }: TabBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -50,6 +54,7 @@ export function TabBar({
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         const isAgent = tab.kind === "agent";
+        const isBusy = busyTabIds.has(tab.id);
         const label = isAgent
           ? agentDisplayName(tab.agent) ?? tab.branch
           : tab.branch;
@@ -64,7 +69,7 @@ export function TabBar({
                 : "text-fg-subtle hover:bg-bg-overlay hover:text-fg-muted"
             }`}
           >
-            {/* Status dot */}
+            {/* Status dot — pulses when busy */}
             <span
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${
                 tab.hasActiveSession
@@ -73,6 +78,7 @@ export function TabBar({
                     : "bg-green"
                   : "bg-fg-subtle"
               }`}
+              style={isBusy ? { animation: "pulse 1.5s ease-in-out infinite" } : undefined}
             />
 
             {/* Icon */}
@@ -117,12 +123,31 @@ export function TabBar({
         </button>
 
         {dropdownOpen && (
-          <div className="absolute top-full right-0 mt-1 z-50 rounded-lg border border-border bg-bg-overlay py-1 shadow-lg">
+          <div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] rounded-lg border border-border bg-bg-overlay py-1 shadow-lg">
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Agent
+            </div>
             {AGENT_OPTIONS.map((agent) => (
               <button
                 key={agent}
                 onClick={() => {
                   onAddAgentTab?.(agent);
+                  setDropdownOpen(false);
+                }}
+                className="px-3 py-1.5 text-[12px] text-fg-muted hover:bg-bg-hover hover:text-fg w-full text-left"
+              >
+                {agent}
+              </button>
+            ))}
+            <div className="my-1 border-t border-border-subtle" />
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Parallel (own worktree)
+            </div>
+            {AGENT_OPTIONS.map((agent) => (
+              <button
+                key={`parallel-${agent}`}
+                onClick={() => {
+                  onAddParallelAgent?.(agent);
                   setDropdownOpen(false);
                 }}
                 className="px-3 py-1.5 text-[12px] text-fg-muted hover:bg-bg-hover hover:text-fg w-full text-left"

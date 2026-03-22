@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "./features/repos/Sidebar";
 import { useReposQuery } from "./hooks/use-tauri-query";
 import { TitleBar } from "./components/TitleBar";
@@ -66,7 +68,57 @@ export default function App() {
   const chatPtySessionsRef = useRef(chatPtySessions);
   chatPtySessionsRef.current = chatPtySessions;
 
+  // Track which tabs are actively producing PTY output ("busy")
+  const [busyTabIds, setBusyTabIds] = useState<Set<string>>(() => new Set());
+  const busyTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Global pty-output listener to detect tab activity
+  useEffect(() => {
+    const unlisten = listen<{ session_id: string; data: string }>("pty-output", (event) => {
+      const sessionId = event.payload.session_id;
+      // Reverse-map session_id → tabId
+      const sessions = chatPtySessionsRef.current;
+      let tabId: string | null = null;
+      for (const [tid, sid] of sessions.entries()) {
+        if (sid === sessionId) { tabId = tid; break; }
+      }
+      if (!tabId) return;
+
+      const tid = tabId; // capture for closures
+      setBusyTabIds((prev) => {
+        if (prev.has(tid)) return prev;
+        const next = new Set(prev);
+        next.add(tid);
+        return next;
+      });
+
+      // Reset the idle timer for this tab
+      const existing = busyTimersRef.current.get(tid);
+      if (existing) clearTimeout(existing);
+      busyTimersRef.current.set(
+        tid,
+        setTimeout(() => {
+          setBusyTabIds((prev) => {
+            if (!prev.has(tid)) return prev;
+            const next = new Set(prev);
+            next.delete(tid);
+            return next;
+          });
+          busyTimersRef.current.delete(tid);
+        }, 3000)
+      );
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+      // Clear all timers
+      for (const timer of busyTimersRef.current.values()) clearTimeout(timer);
+      busyTimersRef.current.clear();
+    };
+  }, []);
+
   // Load repos so we can auto-populate the initial tab
+  const queryClient = useQueryClient();
   const { data: repos } = useReposQuery();
 
   // Auto-populate the initial tab's repoPath from the first discovered repo
@@ -170,6 +222,57 @@ export default function App() {
       }
     },
     [activeTab, activeTabId]
+  );
+
+  // Parallel agent — creates a dedicated worktree, then spawns the agent in it
+  const handleSpawnParallelAgent = useCallback(
+    async (agent: string) => {
+      if (!activeTab.repoPath) return;
+
+      const resolvedAgent = resolveAgent(agent);
+
+      // Create a worktree with auto-generated branch
+      try {
+        const { branch, worktree_path } = await invoke<{
+          branch: string;
+          worktree_path: string;
+        }>("create_agent_worktree", {
+          repoPath: activeTab.repoPath,
+          agent: resolvedAgent,
+        });
+
+        const tabId = `agent:${resolvedAgent}:${Date.now()}`;
+        const agentTab: Tab = {
+          id: tabId,
+          branch,
+          repoPath: worktree_path,
+          worktree: { path: worktree_path, branch, is_main: false },
+          kind: "agent",
+          agent: resolvedAgent,
+          hasActiveSession: false,
+        };
+        setTabs((prev) => [...prev, agentTab]);
+        setActiveTabId(tabId);
+        setInnerTab("chat");
+
+        // Refresh sidebar to show the new worktree
+        queryClient.invalidateQueries({ queryKey: ["repos"] });
+
+        // Spawn the agent PTY in the worktree directory
+        const sessionId = await invoke<string>("pty_create", {
+          workingDir: worktree_path,
+          command: resolvedAgent,
+        });
+        setChatPtySessions((prev) => {
+          const next = new Map(prev);
+          next.set(tabId, sessionId);
+          return next;
+        });
+      } catch (err) {
+        console.error("[parallel-agent] Failed:", err);
+      }
+    },
+    [activeTab]
   );
 
   // Clear selected checkpoint when switching branch tabs
@@ -367,6 +470,8 @@ export default function App() {
         <Sidebar
           activeTab={activeTab}
           width={sidebarWidth}
+          busyTabIds={busyTabIds}
+          tabs={tabs}
           onBranchSelect={handleBranchSelect}
           onBranchDeleted={handleBranchDeleted}
           onWorktreeDeleted={handleWorktreeDeleted}
@@ -379,9 +484,11 @@ export default function App() {
           <TabBar
             tabs={tabsWithSessions}
             activeTabId={activeTabId}
+            busyTabIds={busyTabIds}
             onSelectTab={setActiveTabId}
             onCloseTab={handleCloseTab}
             onAddAgentTab={(agent) => handleSendToAgent(agent, "")}
+            onAddParallelAgent={handleSpawnParallelAgent}
           />
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

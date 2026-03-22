@@ -80,6 +80,34 @@ fn create_worktree(
     git::create_worktree(&repo_path, &mode, &branch_name, &target_path)
 }
 
+/// Create a worktree with an auto-generated branch name for a parallel agent.
+/// Returns { branch: String, worktree_path: String }.
+#[tauri::command]
+fn create_agent_worktree(
+    repo_path: String,
+    agent: String,
+) -> Result<AgentWorktreeResult, String> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let branch_name = format!("agent/{}-{}", agent, ts);
+    let target_path = format!("{}-agent-{}-{}", repo_path, agent, ts);
+
+    git::create_worktree(&repo_path, "new", &branch_name, &target_path)?;
+
+    Ok(AgentWorktreeResult {
+        branch: branch_name,
+        worktree_path: target_path,
+    })
+}
+
+#[derive(serde::Serialize)]
+struct AgentWorktreeResult {
+    branch: String,
+    worktree_path: String,
+}
+
 #[tauri::command]
 fn delete_worktree(
     repo_path: String,
@@ -846,6 +874,7 @@ pub fn run() {
             unregister_repo,
             hide_repo,
             create_worktree,
+            create_agent_worktree,
             delete_worktree,
             delete_branch,
             list_checkpoints,
