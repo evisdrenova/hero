@@ -26,6 +26,7 @@ pub struct SessionSummary {
     pub summary: Option<SessionSummaryInfo>,
     pub token_usage: Option<TokenUsage>,
     pub initial_attribution: Option<Attribution>,
+    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,6 +72,7 @@ struct RawCheckpointMetadata {
 struct RawSessionRef {
     metadata: Option<String>,
     transcript: Option<String>,
+    prompt: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -184,7 +186,16 @@ fn build_checkpoint_summary(
 
                     // Defer transcript step counting — expensive, done on demand
                     let step_count = 0;
-                    let _ = session_ref; // suppress unused warning
+
+                    // Read the prompt file (small text) for display as title
+                    let prompt = session_ref.prompt.as_deref().and_then(|p| {
+                        let path = if p.starts_with('/') {
+                            p.trim_start_matches('/').to_string()
+                        } else {
+                            format!("{}{}", session_dir, p)
+                        };
+                        read_blob_from_tree(repo, tree, &path).ok()
+                    });
 
                     sessions.push(SessionSummary {
                         session_id: sm.session_id.unwrap_or_default(),
@@ -194,6 +205,7 @@ fn build_checkpoint_summary(
                         summary: sm.summary,
                         token_usage: sm.token_usage,
                         initial_attribution: sm.initial_attribution,
+                        prompt,
                     });
                 }
             }

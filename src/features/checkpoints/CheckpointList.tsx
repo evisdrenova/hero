@@ -107,6 +107,12 @@ export function CheckpointList({
                 const agent = cp.sessions[0]?.agent ?? null;
                 const isSelected = selectedId === cp.checkpoint_id;
                 const isLast = idx === group.items.length - 1;
+                const promptFirstLine = cp.sessions[0]?.prompt?.split("\n")[0];
+                const title =
+                  cp.commit_message ||
+                  cp.sessions[0]?.summary?.intent ||
+                  promptFirstLine ||
+                  cp.checkpoint_id.slice(0, 12);
 
                 return (
                   <button
@@ -128,9 +134,9 @@ export function CheckpointList({
                         : cp.checkpoint_id.slice(0, 7)}
                     </span>
 
-                    {/* Commit message */}
+                    {/* Title: commit message, session intent, or truncated ID */}
                     <span className="truncate text-[13px] font-semibold text-fg">
-                      {cp.commit_message || cp.checkpoint_id}
+                      {title}
                     </span>
 
                     {/* Agent badge */}

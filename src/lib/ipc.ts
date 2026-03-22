@@ -57,6 +57,7 @@ export interface SessionSummary {
   summary: SessionSummaryInfo | null;
   token_usage: TokenUsage | null;
   initial_attribution: Attribution | null;
+  prompt: string | null;
 }
 
 export interface SessionSummaryInfo {

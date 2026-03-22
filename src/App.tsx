@@ -454,13 +454,13 @@ export default function App() {
                           <ArrowLeft size={14} />
                         </button>
                         <GitCommit size={14} className="text-fg-subtle" />
-                        <span className="font-mono text-xs text-accent-fg">
+                        <span className="truncate text-xs font-medium text-fg">
+                          {selectedCheckpoint.commit_message || "Untitled"}
+                        </span>
+                        <span className="font-mono text-xs text-fg-subtle">
                           {selectedCheckpoint.commit_sha
                             ? selectedCheckpoint.commit_sha.slice(0, 7)
                             : selectedCheckpoint.checkpoint_id.slice(0, 7)}
-                        </span>
-                        <span className="truncate text-xs text-fg-muted">
-                          {selectedCheckpoint.commit_message || "Untitled"}
                         </span>
                       </div>
 

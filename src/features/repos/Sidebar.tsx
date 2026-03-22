@@ -104,6 +104,18 @@ export function Sidebar({
   const [deleteBranchDialog, setDeleteBranchDialog] = useState<DeleteBranchDialogState | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteWorktreeDialogState | null>(null);
 
+  // Drag-and-drop reorder state
+  const [repoOrder, setRepoOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("entire:repo-order");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [draggedRepo, setDraggedRepo] = useState<string | null>(null);
+  const [dragOverRepo, setDragOverRepo] = useState<string | null>(null);
+
   const createRepo = createDialog
     ? repos.find((repo) => repo.path === createDialog.repoPath) ?? null
     : null;
@@ -113,7 +125,7 @@ export function Sidebar({
   );
 
   const searchTerm = sidebarSearch.trim().toLowerCase();
-  const filteredRepos = searchTerm
+  const unsortedFilteredRepos = searchTerm
     ? repos
       .map((repo) => {
         const repoNameMatch = repo.name.toLowerCase().includes(searchTerm);
@@ -127,6 +139,28 @@ export function Sidebar({
       })
       .filter((r): r is RepoInfo => r !== null)
     : repos;
+
+  // Sort repos by stored order (repos not in the order list go to the end)
+  const filteredRepos = [...unsortedFilteredRepos].sort((a, b) => {
+    const ai = repoOrder.indexOf(a.path);
+    const bi = repoOrder.indexOf(b.path);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  function handleRepoReorder(fromPath: string, toPath: string) {
+    if (fromPath === toPath) return;
+    const paths = filteredRepos.map((r) => r.path);
+    const fromIdx = paths.indexOf(fromPath);
+    const toIdx = paths.indexOf(toPath);
+    if (fromIdx === -1 || toIdx === -1) return;
+    paths.splice(fromIdx, 1);
+    paths.splice(toIdx, 0, fromPath);
+    setRepoOrder(paths);
+    localStorage.setItem("entire:repo-order", JSON.stringify(paths));
+  }
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -645,11 +679,36 @@ export function Sidebar({
               const repoRefreshing = isRepoRefreshing(refreshingRepoPath, repo.path);
 
               return (
-                <div key={repo.path}>
-                  <div className="group flex items-center">
+                <div
+                  key={repo.path}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedRepo(repo.path);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setDragOverRepo(repo.path);
+                  }}
+                  onDragLeave={() => setDragOverRepo(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedRepo) handleRepoReorder(draggedRepo, repo.path);
+                    setDraggedRepo(null);
+                    setDragOverRepo(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedRepo(null);
+                    setDragOverRepo(null);
+                  }}
+                  className={dragOverRepo === repo.path && draggedRepo !== repo.path ? "border-t-2 border-accent" : ""}
+                  style={{ opacity: draggedRepo === repo.path ? 0.4 : 1 }}
+                >
+                  <div className="group flex items-center transition-colors hover:bg-bg-hover">
                     <button
                       onClick={() => toggleRepo(repo.path)}
-                      className="flex flex-1 items-center gap-2.5 px-4 py-[7px] text-[13px] text-fg-muted transition-colors hover:bg-bg-hover hover:text-fg"
+                      className="flex flex-1 items-center gap-2.5 px-4 py-[7px] text-[13px] text-fg-muted transition-colors group-hover:text-fg"
                     >
                       {expandedRepos.has(repo.path) ? (
                         <ChevronDown size={14} />
@@ -765,7 +824,10 @@ export function Sidebar({
                             : "Delete branch";
 
                         return (
-                          <div key={branch.name} className="group flex items-center">
+                          <div key={branch.name} className={`group flex items-center transition-colors ${isActive
+                                ? "bg-accent-bg"
+                                : "hover:bg-bg-hover"
+                                }`}>
                             <button
                               onClick={() => {
                                 if (worktree) {
@@ -775,8 +837,8 @@ export function Sidebar({
                                 }
                               }}
                               className={`flex flex-1 items-center gap-2 px-2 py-[7px] text-[13px] transition-colors ${isActive
-                                ? "bg-accent-bg text-accent-fg"
-                                : "text-fg-muted hover:bg-bg-hover hover:text-fg"
+                                ? "text-accent-fg"
+                                : "text-fg-muted group-hover:text-fg"
                                 }`}
                             >
                               <GitBranch size={12} />
