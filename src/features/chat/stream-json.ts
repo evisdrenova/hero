@@ -72,5 +72,13 @@ function extractText(obj: Record<string, unknown>): string {
     }
   }
 
+  // Error message — surface to user
+  if (obj.type === "error") {
+    const error = obj.error as Record<string, unknown> | undefined;
+    if (error && typeof error.message === "string") {
+      return `**Error:** ${error.message}\n`;
+    }
+  }
+
   return "";
 }

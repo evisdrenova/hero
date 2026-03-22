@@ -98,6 +98,9 @@ pub fn pty_create(
 
     cmd.cwd(&working_dir);
 
+    // Unset CLAUDECODE so nested claude sessions work
+    cmd.env_remove("CLAUDECODE");
+
     let child = pair
         .slave
         .spawn_command(cmd)

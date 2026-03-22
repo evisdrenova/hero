@@ -73,6 +73,10 @@ pub fn agent_create(
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
+    // Unset CLAUDECODE env var so claude doesn't refuse to run
+    // inside another claude session (the Tauri app may inherit this)
+    cmd.env_remove("CLAUDECODE");
+
     // Add -p flag for non-interactive print mode
     cmd.arg("-p");
 

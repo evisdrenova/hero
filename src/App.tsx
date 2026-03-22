@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { Sidebar } from "./features/repos/Sidebar";
 import { useReposQuery } from "./hooks/use-tauri-query";
 import { TitleBar } from "./components/TitleBar";
@@ -12,36 +11,10 @@ import { CheckpointInsightsContainer } from "./features/insights/CheckpointInsig
 import { BranchInsightsContainer } from "./features/insights/BranchInsightsContainer";
 import { BranchDebugContainer } from "./features/debug/BranchDebugContainer";
 import { CheckpointDebugContainer } from "./features/debug/CheckpointDebugContainer";
-import { TerminalPanel } from "./features/terminal/TerminalPanel";
-import { PromptBar } from "./features/terminal/PromptBar";
-import type { TerminalPanelHandle } from "./features/terminal/TerminalPanel";
-import { ChatView } from "./features/chat/ChatView";
-import {
-  createChatSession,
-  appendOutput,
-  addUserMessage,
-  type ChatSession,
-} from "./features/chat/chat-session";
-import { createStreamJsonParser, type StreamJsonParser } from "./features/chat/stream-json";
+import { XtermTerminal } from "./features/terminal/XtermTerminal";
 import { createBranchTab, createWorktreeTab } from "./features/repos/tab-state";
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from "./features/repos/sidebar-width.ts";
 import { planWorktreeDeletionCleanup } from "./features/repos/worktree-delete-state.ts";
-import {
-  collectWorkspaceSurfaceIds,
-  createTerminalWorkspace,
-  type TerminalWorkspace,
-  type WorkspaceUpdate,
-} from "./features/terminal/workspace";
-import {
-  createTerminalPanelVisibility,
-  isTerminalPanelOpen,
-  setTerminalPanelOpen,
-  syncTerminalPanelVisibility,
-} from "./features/terminal/panel-visibility";
-import {
-  DEFAULT_TERMINAL_HEIGHT,
-  clampTerminalHeight,
-} from "./features/terminal/resize.ts";
 import { useLiveUpdates } from "./hooks/use-live-updates";
 import type { BranchInfo, CheckpointSummary, WorktreeInfo } from "./lib/ipc";
 import { ArrowLeft, GitCommit } from "lucide-react";
@@ -77,17 +50,6 @@ export default function App() {
   ]);
   const [activeTabId, setActiveTabId] = useState("main");
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const [terminalHeight, setTerminalHeight] = useState(() => {
-    const storedHeight = Number(localStorage.getItem("entire:terminal-height"));
-    const initialHeight = Number.isFinite(storedHeight) && storedHeight > 0
-      ? storedHeight
-      : DEFAULT_TERMINAL_HEIGHT;
-
-    return clampTerminalHeight(initialHeight, window.innerHeight);
-  });
-  const [terminalPanelVisibility, setTerminalPanelVisibility] = useState(
-    () => createTerminalPanelVisibility(["main"])
-  );
   const [innerTab, setInnerTab] = useState<
     "chat" | "checkpoints" | "diff" | "insights" | "debug"
   >("chat");
@@ -97,40 +59,28 @@ export default function App() {
     "transcript" | "diff" | "insights" | "debug"
   >("transcript");
 
-  const [workspaceMap, setWorkspaceMap] = useState<Map<string, TerminalWorkspace>>(
-    () => new Map([["main", createTerminalWorkspace()]])
-  );
-  const [chatSessions, setChatSessions] = useState<Map<string, ChatSession>>(
+  // Maps tab ID → PTY session ID for the chat terminal
+  const [chatPtySessions, setChatPtySessions] = useState<Map<string, string>>(
     () => new Map()
   );
-
-  const terminalRef = useRef<TerminalPanelHandle>(null);
-  const chatParsersRef = useRef<Map<string, StreamJsonParser>>(new Map());
+  const chatPtySessionsRef = useRef(chatPtySessions);
+  chatPtySessionsRef.current = chatPtySessions;
 
   // Load repos so we can auto-populate the initial tab
   const { data: repos } = useReposQuery();
 
   // Auto-populate the initial tab's repoPath from the first discovered repo
   useEffect(() => {
-    invoke("debug_log", {
-      message: `useEffect[repos]: repos=${repos ? repos.length : "null"}, first repo path=${repos?.[0]?.path ?? "none"}`,
-    }).catch(() => { });
-
     if (!repos || repos.length === 0) return;
     setTabs((prev) => {
       const updated = prev.map((tab) => {
         if (tab.id === "main" && !tab.repoPath) {
           const repo = repos[0];
           const headBranch = repo.branches.find((b: { is_head: boolean }) => b.is_head);
-          const newPath = repo.path;
-          const newBranch = headBranch?.name ?? repo.branches[0]?.name ?? "main";
-          invoke("debug_log", {
-            message: `Auto-populating initial tab: repoPath=${newPath}, branch=${newBranch}`,
-          }).catch(() => { });
           return {
             ...tab,
-            repoPath: newPath,
-            branch: newBranch,
+            repoPath: repo.path,
+            branch: headBranch?.name ?? repo.branches[0]?.name ?? "main",
           };
         }
         return tab;
@@ -140,100 +90,55 @@ export default function App() {
   }, [repos]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
-  const activeWorkspace =
-    workspaceMap.get(activeTabId) ?? createTerminalWorkspace();
-  const isTerminalOpen = isTerminalPanelOpen(terminalPanelVisibility, activeTabId);
   const tabsWithSessions = tabs.map((tab) => ({
     ...tab,
-    hasActiveSession: collectWorkspaceSurfaceIds(workspaceMap.get(tab.id)).length > 0,
+    hasActiveSession: chatPtySessions.has(tab.id),
   }));
 
   // Live updates — watch active repo for checkpoint/session changes
   useLiveUpdates(activeTab.repoPath);
 
+  // Auto-spawn a PTY shell when the Chat tab is active and no session exists
   useEffect(() => {
-    setWorkspaceMap((prev) => {
-      let changed = false;
-      const next = new Map(prev);
-      for (const tab of tabs) {
-        if (!next.has(tab.id)) {
-          next.set(tab.id, createTerminalWorkspace());
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [tabs]);
+    if (innerTab !== "chat") return;
+    if (!activeTab.repoPath) return;
+    if (chatPtySessionsRef.current.has(activeTabId)) return;
 
-  useEffect(() => {
-    setTerminalPanelVisibility((prev) =>
-      syncTerminalPanelVisibility(
-        prev,
-        tabs.map((tab) => tab.id)
-      )
-    );
-  }, [tabs]);
-
-  const handleWorkspaceChange = useCallback(
-    (tabId: string, update: WorkspaceUpdate) => {
-      setWorkspaceMap((prev) => {
-        const next = new Map(prev);
-        const current = next.get(tabId) ?? createTerminalWorkspace();
-        next.set(
-          tabId,
-          typeof update === "function" ? update(current) : update
-        );
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleSetTerminalOpen = useCallback((tabId: string, isOpen: boolean) => {
-    setTerminalPanelVisibility((prev) => setTerminalPanelOpen(prev, tabId, isOpen));
-  }, []);
-
-  // Agent dispatch — create a PTY for the agent and show in Chat view only
-  const handleSendToAgent = useCallback(
-    (agent: string, prompt: string) => {
-      if (!activeTab.repoPath) return;
-
-      // If current tab already has a chat session, send follow-up
-      const existingChat = chatSessions.get(activeTabId);
-      if (existingChat && prompt) {
-        // Flush pending text, add user message
-        setChatSessions((prev) => {
+    // Spawn a shell PTY for this tab
+    invoke<string>("pty_create", {
+      workingDir: activeTab.repoPath,
+    })
+      .then((sessionId) => {
+        setChatPtySessions((prev) => {
           const next = new Map(prev);
-          next.set(activeTabId, addUserMessage(existingChat, prompt));
+          next.set(activeTabId, sessionId);
           return next;
         });
-        setInnerTab("chat");
+      })
+      .catch((err) => {
+        console.error("[chat] pty_create FAILED:", err);
+      });
+  }, [innerTab, activeTabId, activeTab.repoPath]);
 
-        // Spawn a new agent process for the follow-up
-        const resolvedFollowUp = resolveAgent(agent);
-        invoke<string>("agent_create", {
-          workingDir: activeTab.repoPath,
-          command: resolvedFollowUp,
-          prompt,
-          args: ["--output-format", "stream-json"],
-        })
-          .then((sessionId) => {
-            chatParsersRef.current.set(sessionId, createStreamJsonParser());
-            // Update the chat session to use the new agent session ID
-            setChatSessions((prev) => {
-              const next = new Map(prev);
-              const current = next.get(activeTabId);
-              if (current) {
-                next.set(activeTabId, { ...current, id: sessionId, isStreaming: true });
-              }
-              return next;
-            });
-          })
-          .catch(console.error);
+  // Agent dispatch — spawn Claude in a PTY for the Chat tab
+  const handleSendToAgent = useCallback(
+    async (agent: string, prompt: string) => {
+      if (!activeTab.repoPath) return;
+
+      const resolvedAgent = resolveAgent(agent);
+
+      // If current tab already has a PTY, write the prompt to it
+      const existingPty = chatPtySessionsRef.current.get(activeTabId);
+      if (existingPty && prompt) {
+        setInnerTab("chat");
+        await invoke("pty_write", {
+          sessionId: existingPty,
+          data: prompt + "\n",
+        }).catch(console.error);
         return;
       }
 
-      const resolvedAgent = resolveAgent(agent);
+      // Create a new agent tab
       const tabId = `agent:${resolvedAgent}:${Date.now()}`;
       const agentTab: Tab = {
         id: tabId,
@@ -244,99 +149,28 @@ export default function App() {
         agent: resolvedAgent,
         hasActiveSession: false,
       };
-
       setTabs((prev) => [...prev, agentTab]);
       setActiveTabId(tabId);
       setInnerTab("chat");
 
-      // Spawn agent with -p flag — prompt is passed as an argument
-      console.log("[chat] agent_create:", resolvedAgent, "prompt:", prompt, "cwd:", activeTab.repoPath);
-      invoke<string>("agent_create", {
-        workingDir: activeTab.repoPath,
-        command: resolvedAgent,
-        prompt,
-        args: ["--output-format", "stream-json"],
-      })
-        .then((sessionId) => {
-          console.log("[chat] agent_create returned sessionId:", sessionId);
-          chatParsersRef.current.set(sessionId, createStreamJsonParser());
-          setChatSessions((prev) => {
-            const next = new Map(prev);
-            next.set(tabId, createChatSession(sessionId, prompt));
-            return next;
-          });
-        })
-        .catch((err) => {
-          console.error("[chat] agent_create FAILED:", err);
+      // Spawn a PTY running the agent
+      try {
+        const sessionId = await invoke<string>("pty_create", {
+          workingDir: activeTab.repoPath,
+          command: resolvedAgent,
+          initialInput: prompt ? prompt + "\n" : undefined,
         });
+        setChatPtySessions((prev) => {
+          const next = new Map(prev);
+          next.set(tabId, sessionId);
+          return next;
+        });
+      } catch (err) {
+        console.error("[chat] pty_create FAILED:", err);
+      }
     },
-    [activeTab, activeTabId, chatSessions]
+    [activeTab, activeTabId]
   );
-
-  // Persist UI state to localStorage
-  useEffect(() => {
-    localStorage.setItem("entire:terminal-height", String(terminalHeight));
-  }, [terminalHeight]);
-  useEffect(() => {
-    function handleWindowResize() {
-      setTerminalHeight((currentHeight) =>
-        clampTerminalHeight(currentHeight, window.innerHeight)
-      );
-    }
-
-    window.addEventListener("resize", handleWindowResize);
-    return () => window.removeEventListener("resize", handleWindowResize);
-  }, []);
-
-  // Listen for agent output (line-delimited JSON) and route to chat sessions
-  useEffect(() => {
-    let eventCount = 0;
-    const unlisten = listen<{ session_id: string; data: string }>(
-      "agent-output",
-      (event) => {
-        eventCount++;
-        const { session_id, data } = event.payload;
-        if (eventCount <= 10) {
-          console.log(`[chat] agent-output #${eventCount} session=${session_id} data=${data.slice(0, 200)}`);
-        }
-        const parser = chatParsersRef.current.get(session_id);
-        if (!parser) {
-          console.warn(`[chat] No parser for session ${session_id}, registered:`, [...chatParsersRef.current.keys()]);
-          return;
-        }
-
-        const text = parser.feed(data + "\n");
-        if (eventCount <= 10) {
-          console.log(`[chat] parsed text: "${text.slice(0, 200)}"`);
-        }
-        if (!text) return;
-
-        setChatSessions((prev) => {
-          for (const [tabId, session] of prev) {
-            if (session.id === session_id) {
-              const next = new Map(prev);
-              next.set(tabId, appendOutput(session, text));
-              return next;
-            }
-          }
-          console.warn(`[chat] No chat session found for agent session ${session_id}`);
-          return prev;
-        });
-      }
-    );
-
-    const unlistenDone = listen<{ session_id: string; exit_code: number | null }>(
-      "agent-done",
-      (event) => {
-        console.log(`[chat] agent-done session=${event.payload.session_id} exit=${event.payload.exit_code}`);
-      }
-    );
-
-    return () => {
-      unlisten.then((fn) => fn());
-      unlistenDone.then((fn) => fn());
-    };
-  }, []);
 
   // Clear selected checkpoint when switching branch tabs
   useEffect(() => {
@@ -353,11 +187,6 @@ export default function App() {
       if (meta && e.key === "k") {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('input[placeholder*="Search"]')?.focus();
-      }
-      // Ctrl+` or Cmd+J = toggle terminal
-      if ((e.ctrlKey && e.key === "`") || (meta && e.key === "j")) {
-        e.preventDefault();
-        handleSetTerminalOpen(activeTabId, !isTerminalOpen);
       }
       // Cmd+W = close active tab
       if (meta && e.key === "w") {
@@ -390,7 +219,7 @@ export default function App() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeTabId, handleSetTerminalOpen, isTerminalOpen, tabs, selectedCheckpoint]);
+  }, [activeTabId, tabs, selectedCheckpoint]);
 
   function handleBranchSelect(branch: BranchInfo, repoPath: string) {
     const newTab = createBranchTab(branch, repoPath);
@@ -432,21 +261,12 @@ export default function App() {
     if (activeTabId === tabId) {
       setActiveTabId(newTabs[Math.max(0, idx - 1)].id);
     }
-    const closedWorkspace = workspaceMap.get(tabId);
-    for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-      invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
+    // Destroy the chat PTY session for this tab
+    const chatPtyId = chatPtySessionsRef.current.get(tabId);
+    if (chatPtyId) {
+      invoke("pty_destroy", { sessionId: chatPtyId }).catch(console.error);
     }
-    setWorkspaceMap((prev) => {
-      const next = new Map(prev);
-      next.delete(tabId);
-      return next;
-    });
-    const chatSession = chatSessions.get(tabId);
-    if (chatSession) {
-      invoke("agent_destroy", { sessionId: chatSession.id }).catch(console.error);
-      chatParsersRef.current.delete(chatSession.id);
-    }
-    setChatSessions((prev) => {
+    setChatPtySessions((prev) => {
       if (!prev.has(tabId)) return prev;
       const next = new Map(prev);
       next.delete(tabId);
@@ -463,9 +283,7 @@ export default function App() {
         tab.repoPath === repoPath
     );
 
-    if (tabsToRemove.length === 0) {
-      return;
-    }
+    if (tabsToRemove.length === 0) return;
 
     const nextTabs = tabs.filter((tab) => !tabsToRemove.some((candidate) => candidate.id === tab.id));
     setTabs(nextTabs);
@@ -474,14 +292,14 @@ export default function App() {
       setActiveTabId(nextTabs[0].id);
     }
 
-    setWorkspaceMap((prev) => {
+    setChatPtySessions((prev) => {
       const next = new Map(prev);
       for (const tab of tabsToRemove) {
-        const closedWorkspace = next.get(tab.id);
-        for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-          invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
+        const ptyId = next.get(tab.id);
+        if (ptyId) {
+          invoke("pty_destroy", { sessionId: ptyId }).catch(console.error);
+          next.delete(tab.id);
         }
-        next.delete(tab.id);
       }
       return next;
     });
@@ -494,9 +312,7 @@ export default function App() {
       worktreePath,
     });
 
-    if (cleanup.removedTabIds.length === 0) {
-      return;
-    }
+    if (cleanup.removedTabIds.length === 0) return;
 
     setTabs(cleanup.remainingTabs);
 
@@ -504,36 +320,17 @@ export default function App() {
       setActiveTabId(cleanup.nextActiveTabId);
     }
 
-    setWorkspaceMap((prev) => {
+    setChatPtySessions((prev) => {
       const next = new Map(prev);
       for (const tabId of cleanup.removedTabIds) {
-        const closedWorkspace = next.get(tabId);
-        for (const surfaceId of collectWorkspaceSurfaceIds(closedWorkspace)) {
-          invoke("pty_destroy", { sessionId: surfaceId }).catch(console.error);
+        const ptyId = next.get(tabId);
+        if (ptyId) {
+          invoke("pty_destroy", { sessionId: ptyId }).catch(console.error);
+          next.delete(tabId);
         }
-        next.delete(tabId);
       }
       return next;
     });
-  }
-
-  function handleResizeStart(e: React.MouseEvent) {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = terminalHeight;
-
-    function onMouseMove(ev: MouseEvent) {
-      const delta = startY - ev.clientY;
-      setTerminalHeight(
-        clampTerminalHeight(startHeight + delta, window.innerHeight)
-      );
-    }
-    function onMouseUp() {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    }
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
   }
 
   function handleSidebarResizeStart(e: React.MouseEvent<HTMLDivElement>) {
@@ -614,11 +411,18 @@ export default function App() {
 
             {/* Main view */}
             <div className="flex flex-1 overflow-hidden bg-bg">
-              {innerTab === "chat" && (
-                <div className="flex flex-1 overflow-hidden">
-                  <ChatView session={chatSessions.get(activeTabId) ?? null} />
+              {/* Render one terminal per tab with a PTY — keep mounted, show/hide via CSS */}
+              {Array.from(chatPtySessions.entries()).map(([tabId, ptySessionId]) => (
+                <div
+                  key={tabId}
+                  className="flex flex-1 overflow-hidden"
+                  style={{
+                    display: innerTab === "chat" && tabId === activeTabId ? "flex" : "none",
+                  }}
+                >
+                  <XtermTerminal sessionId={ptySessionId} />
                 </div>
-              )}
+              ))}
               {innerTab === "checkpoints" && (
                 <>
                   {/* Checkpoint list — always visible when on checkpoints tab */}
@@ -742,34 +546,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            {/* Prompt bar — always visible above terminal */}
-            <PromptBar onSubmit={handleSendToAgent} />
-
-            {/* Terminal panel */}
-            {isTerminalOpen && (
-              <TerminalPanel
-                ref={terminalRef}
-                height={terminalHeight}
-                tab={activeTab}
-                workspace={activeWorkspace}
-                onWorkspaceChange={(update) =>
-                  handleWorkspaceChange(activeTab.id, update)
-                }
-                handleResizeStart={handleResizeStart}
-                onToggle={() => handleSetTerminalOpen(activeTab.id, false)}
-              />
-            )}
-
-            {!isTerminalOpen && (
-              <button
-                onClick={() => handleSetTerminalOpen(activeTab.id, true)}
-                className="flex h-7 shrink-0 items-center gap-2 border-t border-border bg-bg-raised px-4 text-[11px] text-fg-subtle hover:text-fg-muted"
-              >
-                <span>▲ Terminal</span>
-                <span className="text-fg-faint">⌘J</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
