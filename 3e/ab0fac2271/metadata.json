@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "3eab0fac2271",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src-tauri/src/checkpoint/mod.rs",
+    "src/App.tsx",
+    "src/features/checkpoints/CheckpointList.tsx",
+    "src/features/repos/Sidebar.tsx",
+    "src/lib/ipc.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3e/ab0fac2271/0/metadata.json",
+      "transcript": "/3e/ab0fac2271/0/full.jsonl",
+      "context": "/3e/ab0fac2271/0/context.md",
+      "content_hash": "/3e/ab0fac2271/0/content_hash.txt",
+      "prompt": "/3e/ab0fac2271/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6085,
+    "cache_creation_tokens": 980079,
+    "cache_read_tokens": 53948709,
+    "output_tokens": 169396,
+    "api_call_count": 535
+  }
+}
