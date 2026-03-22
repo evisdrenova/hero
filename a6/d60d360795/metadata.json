@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "a6d60d360795",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src-tauri/src/agent/mod.rs",
+    "src-tauri/src/pty/mod.rs",
+    "src/App.tsx",
+    "src/features/chat/stream-json.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a6/d60d360795/0/metadata.json",
+      "transcript": "/a6/d60d360795/0/full.jsonl",
+      "context": "/a6/d60d360795/0/context.md",
+      "content_hash": "/a6/d60d360795/0/content_hash.txt",
+      "prompt": "/a6/d60d360795/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 5985,
+    "cache_creation_tokens": 925533,
+    "cache_read_tokens": 44652106,
+    "output_tokens": 151535,
+    "api_call_count": 453
+  }
+}
