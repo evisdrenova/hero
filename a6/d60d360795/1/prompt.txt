@@ -1,0 +1,1 @@
+Center the empty state on teh chat
