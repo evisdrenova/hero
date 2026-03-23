@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "2ccc21d621c9",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src-tauri/src/delta/events.rs",
+    "src-tauri/src/delta/gates.rs",
+    "src-tauri/src/delta/mod.rs",
+    "src-tauri/src/delta/orchestrator.rs",
+    "src-tauri/src/delta/planner.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/pty/mod.rs",
+    "src/App.tsx",
+    "src/features/delta/DeltaCreationModal.tsx",
+    "src/features/delta/DeltaSidebar.tsx",
+    "src/features/delta/DeltaSplitView.tsx",
+    "src/features/delta/EventFeed.tsx",
+    "src/features/delta/GateResult.tsx",
+    "src/features/delta/PlanPane.tsx",
+    "src/features/delta/QuestionCard.tsx",
+    "src/features/delta/ReviewSummary.tsx",
+    "src/features/delta/TaskDAGView.tsx",
+    "src/features/delta/types.ts",
+    "src/hooks/use-delta-query.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2c/cc21d621c9/0/metadata.json",
+      "transcript": "/2c/cc21d621c9/0/full.jsonl",
+      "context": "/2c/cc21d621c9/0/context.md",
+      "content_hash": "/2c/cc21d621c9/0/content_hash.txt",
+      "prompt": "/2c/cc21d621c9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6366,
+    "cache_creation_tokens": 1521162,
+    "cache_read_tokens": 76364684,
+    "output_tokens": 295135,
+    "api_call_count": 741
+  }
+}
