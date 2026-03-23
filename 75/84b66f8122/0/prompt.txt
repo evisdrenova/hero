@@ -1,0 +1,40 @@
+add cmd + f find on transcript, diff and insights and debug tabs. also fix bug where when I double click or highlight something in the terminal entire app crashes.
+
+---
+
+still crashes when I highlight something in terminal
+
+---
+
+well app doesnt crash but highlighting doesn't work
+
+---
+
+<task-notification>
+<task-id>b3k3ps6b1</task-id>
+<tool-use-id>toolu_01EtWMBWA1DL6DcmKZEot9tD</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-alisha-Projects-entire-app/e5c48987-9bd4-45cf-8540-0aeab5b6516a/tasks/b3k3ps6b1.output</output-file>
+<status>completed</status>
+<summary>Background command "Disassemble mouse_button function" completed (exit code 0)</summary>
+</task-notification>
+Read the output file to retrieve the result: /private/tmp/claude-501/-Users-alisha-Projects-entire-app/e5c48987-9bd4-45cf-8540-0aeab5b6516a/tasks/b3k3ps6b1.output
+
+---
+
+highlighting still not working and when I do cmd + f it also highlights whats in the search box making it impossible to type more than 1 letter
+
+---
+
+how to rebuild?
+
+---
+
+cmd + f works better but after I type every letter I have to click back into search box to type next letter
+
+---
+
+same issue not fixed
+
+---
+
+great that works. remove aut correct from the search bar

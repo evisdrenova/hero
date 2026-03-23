@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "7584b66f8122",
+  "session_id": "e5c48987-9bd4-45cf-8540-0aeab5b6516a",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-21T19:19:59.447565Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src-tauri/src/ghostty/overlay.rs"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "fa91308b48ce",
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 48408,
+    "cache_read_tokens": 1426607,
+    "output_tokens": 7786,
+    "api_call_count": 32
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-21T19:19:59.333171Z",
+    "agent_lines": 102,
+    "human_added": 300,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 402,
+    "agent_percentage": 25.37313432835821
+  }
+}

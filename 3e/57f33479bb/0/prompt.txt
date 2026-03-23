@@ -1,0 +1,5 @@
+can you creaet a command that runs the app but doesn't have hot reload. its hard to use the app while also having ai develop new features
+
+---
+
+I want both version available

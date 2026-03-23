@@ -1,0 +1,87 @@
+push
+
+---
+
+yes
+
+---
+
+fix ~/Projects/entire-app (main) $ npm run tauri dev
+
+> entire-desktop@0.1.0 tauri
+> tauri dev
+
+     Running BeforeDevCommand (`npm run dev`)
+
+> entire-desktop@0.1.0 dev
+> vite
+
+
+  VITE v7.3.1  ready in 193 ms
+
+  ➜  Local:   http://localhost:1420/
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching /Users/alisha/Projects/entire-app/src-tauri for changes...
+   Compiling entire-desktop v0.1.0 (/Users/alisha/Projects/entire-app/src-tauri)
+error[E0425]: cannot find value `home` in this scope
+   --> src/config/mod.rs:165:24
+    |
+165 |         PathBuf::from(&home).join("Projects"),
+    |                        ^^^^
+    |
+   --> /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/library/core/src/option.rs:608:4
+    |
+    = note: similarly named tuple variant `Some` defined here
+help: a tuple variant with a similar name exists
+    |
+165 -         PathBuf::from(&home).join("Projects"),
+165 +         PathBuf::from(&Some).join("Projects"),
+    |
+
+error[E0425]: cannot find value `home` in this scope
+   --> src/config/mod.rs:166:24
+    |
+166 |         PathBuf::from(&home).join("code"),
+    |                        ^^^^
+    |
+   --> /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/library/core/src/option.rs:608:4
+    |
+    = note: similarly named tuple variant `Some` defined here
+help: a tuple variant with a similar name exists
+    |
+166 -         PathBuf::from(&home).join("code"),
+166 +         PathBuf::from(&Some).join("code"),
+    |
+
+error[E0425]: cannot find value `home` in this scope
+   --> src/config/mod.rs:167:24
+    |
+167 |         PathBuf::from(&home).join("src"),
+    |                        ^^^^
+    |
+   --> /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/library/core/src/option.rs:608:4
+    |
+    = note: similarly named tuple variant `Some` defined here
+help: a tuple variant with a similar name exists
+    |
+167 -         PathBuf::from(&home).join("src"),
+167 +         PathBuf::from(&Some).join("src"),
+    |
+
+error[E0425]: cannot find value `home` in this scope
+   --> src/config/mod.rs:168:24
+    |
+168 |         PathBuf::from(&home).join("dev"),
+    |                        ^^^^
+    |
+   --> /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/library/core/src/option.rs:608:4
+    |
+    = note: similarly named tuple variant `Some` defined here
+help: a tuple variant with a similar name exists
+    |
+168 -         PathBuf::from(&home).join("dev"),
+168 +         PathBuf::from(&Some).join("dev"),
+    |
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `entire-desktop` (lib) due to 4 previous errors

@@ -1,0 +1,9 @@
+can you also update claude / codex settings to allow cargo and other safe dev commands
+
+---
+
+this should be in project settings not my user
+
+---
+
+good but don't allow npm install

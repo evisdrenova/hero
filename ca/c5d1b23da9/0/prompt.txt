@@ -1,0 +1,13 @@
+terminal highlight doesn't work
+
+---
+
+highlighting works but app crashes
+
+---
+
+it works but when I copy its not just copying the text its also copying the html. I typed hello into the terminal and copied it and this is what was copied  hello<div style="font-family: monospace; white-space: pre;">hello</div>
+
+---
+
+it works but when I copy its not just copying the text its also copying the html. I typed hello into the terminal and copied it and this is what was copied  hello<div style="font-family: monospace; white-space: pre;">hello</div>

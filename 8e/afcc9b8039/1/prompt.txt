@@ -1,0 +1,12 @@
+fix   ➜  Local:   http://localhost:1420/
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching /Users/alisha/Projects/entire-app-worklog/src-tauri for changes...
+warning: unused import: `Path`
+ --> src/journal/mod.rs:6:17
+  |
+6 | use std::path::{Path, PathBuf};
+  |                 ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `entire-desktop` (lib) generated 1 warning (run `cargo fix --lib -p entire-desktop` to apply 1 suggestion)

@@ -1,0 +1,1 @@
+when pressing generate summary its still blocking the ui. its not happening in the background. also add a refresh button to the page
