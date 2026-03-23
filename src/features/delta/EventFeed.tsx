@@ -120,6 +120,14 @@ function EventItem({
   onAnswerQuestion: (questionId: string, answer: string, taskId: string) => void;
 }) {
   switch (event.type) {
+    case "user_message":
+      return (
+        <div className="flex justify-end">
+          <div className="max-w-[80%] rounded-lg bg-accent/10 px-3 py-2 text-xs text-fg">
+            {event.message}
+          </div>
+        </div>
+      );
     case "progress":
       return (
         <div className="flex gap-2 text-xs">

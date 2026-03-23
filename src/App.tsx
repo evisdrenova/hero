@@ -76,6 +76,9 @@ export default function App() {
   const [sidebarMode, setSidebarMode] = useState<"deltas" | "repos">("repos");
   const [activeDeltaId, setActiveDeltaId] = useState<string | null>(null);
   const [showCreateDelta, setShowCreateDelta] = useState(false);
+  const [deltaLocalMessages, setDeltaLocalMessages] = useState<
+    Map<string, Array<{ type: "user_message"; message: string; timestamp: number }>>
+  >(() => new Map());
 
   // Maps tab ID → PTY session ID for the chat terminal
   const [chatPtySessions, setChatPtySessions] = useState<Map<string, string>>(
@@ -591,7 +594,10 @@ export default function App() {
               {innerTab === "chat" && activeDelta && sidebarMode === "deltas" ? (
                 <DeltaSplitView
                   delta={activeDelta}
-                  events={deltaEvents ?? []}
+                  events={[
+                    ...(deltaEvents ?? []),
+                    ...(deltaLocalMessages.get(activeDeltaId ?? "") ?? []),
+                  ].sort((a, b) => a.timestamp - b.timestamp)}
                   tasks={deltaTasks ?? []}
                   dag={deltaDag ?? null}
                   plan={deltaPlan ?? ""}
@@ -607,7 +613,21 @@ export default function App() {
                     }
                   }}
                   onSendMessage={(msg) => {
-                    console.log("[delta] send message:", msg);
+                    if (!activeDeltaId) return;
+                    // Add to local messages so it appears immediately
+                    const userMsg = { type: "user_message" as const, message: msg, timestamp: Date.now() };
+                    setDeltaLocalMessages((prev) => {
+                      const next = new Map(prev);
+                      const existing = next.get(activeDeltaId) ?? [];
+                      next.set(activeDeltaId, [...existing, userMsg]);
+                      return next;
+                    });
+                    // During planning, append to the plan content
+                    if (activeDelta?.status === "planning") {
+                      const current = deltaPlan ?? "";
+                      const updated = current ? `${current}\n\n${msg}` : msg;
+                      updatePlanMutation.mutate({ deltaId: activeDeltaId, content: updated });
+                    }
                   }}
                 />
               ) : (

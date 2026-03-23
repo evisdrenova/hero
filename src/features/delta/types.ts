@@ -72,6 +72,11 @@ export interface GateResultEntry {
 
 export type DeltaEvent =
   | {
+      type: "user_message";
+      message: string;
+      timestamp: number;
+    }
+  | {
       type: "progress";
       task_id: string;
       agent: string;
