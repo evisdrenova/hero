@@ -1,14 +1,15 @@
-import { useState } from "react";
-import { Plus, ChevronDown, ChevronRight, Loader2, Circle, CheckCircle, XCircle, Pencil, Play } from "lucide-react";
-import { useDeltaListQuery, useDeltaTasksQuery } from "../../hooks/use-delta-query";
+import { useState, useEffect } from "react";
+import { Plus, ChevronDown, ChevronRight, Loader2, Circle, CheckCircle, XCircle, Pencil, Play, MoreHorizontal, Trash2 } from "lucide-react";
+import { useDeltaListQuery, useDeltaTasksQuery, useDeleteDeltaMutation } from "../../hooks/use-delta-query";
 import type { DeltaStatus } from "./types";
 
 interface DeltaSidebarProps {
   activeDeltaId: string | null;
-  onSelectDelta: (deltaId: string) => void;
+  onSelectDelta: (deltaId: string | null) => void;
   onNewDelta: () => void;
   width: number;
   onResizeStart: (e: React.MouseEvent<HTMLDivElement>) => void;
+  streamingDeltaIds?: Set<string>;
 }
 
 function statusIcon(status: DeltaStatus) {
@@ -50,11 +51,27 @@ export function DeltaSidebar({
   activeDeltaId,
   onSelectDelta,
   onNewDelta,
-  width,
+  width: _width,
   onResizeStart,
+  streamingDeltaIds,
 }: DeltaSidebarProps) {
   const { data: deltas, isLoading } = useDeltaListQuery();
+  const deleteMutation = useDeleteDeltaMutation();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-delta-dropdown]")) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openDropdown]);
 
   const activeDeltas = (deltas ?? []).filter(
     d => d.status !== "completed" && d.status !== "cancelled"
@@ -63,10 +80,17 @@ export function DeltaSidebar({
     d => d.status === "completed" || d.status === "cancelled"
   );
 
+  const handleDelete = (deltaId: string) => {
+    setOpenDropdown(null);
+    if (activeDeltaId === deltaId) {
+      onSelectDelta(null);
+    }
+    deleteMutation.mutate(deltaId);
+  };
+
   return (
     <div
-      className="relative flex h-full shrink-0 flex-col border-r border-border bg-bg-raised"
-      style={{ width }}
+      className="relative flex flex-1 min-h-0 shrink-0 flex-col bg-bg-raised"
     >
       {/* Header */}
       <div className="flex h-9 items-center justify-between border-b border-border-subtle px-3">
@@ -89,24 +113,21 @@ export function DeltaSidebar({
         )}
 
         {activeDeltas.map((delta) => (
-          <button
+          <DeltaRow
             key={delta.id}
-            onClick={() => onSelectDelta(delta.id)}
-            className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
-              activeDeltaId === delta.id
-                ? "bg-accent/10 text-fg"
-                : "text-fg-muted hover:bg-bg-hover hover:text-fg"
-            }`}
-          >
-            {statusIcon(delta.status)}
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[13px]">{delta.name}</span>
-              <span className="text-[10px] text-fg-subtle">
-                {statusLabel(delta.status)}
-              </span>
-            </div>
-            <DeltaProgress deltaId={delta.id} />
-          </button>
+            deltaId={delta.id}
+            name={delta.name}
+            status={delta.status}
+            isActive={activeDeltaId === delta.id}
+            isStreaming={streamingDeltaIds?.has(delta.id) ?? false}
+            isDropdownOpen={openDropdown === delta.id}
+            onSelect={() => onSelectDelta(delta.id)}
+            onToggleDropdown={(e) => {
+              e.stopPropagation();
+              setOpenDropdown(openDropdown === delta.id ? null : delta.id);
+            }}
+            onDelete={() => handleDelete(delta.id)}
+          />
         ))}
 
         {activeDeltas.length === 0 && !isLoading && (
@@ -134,18 +155,21 @@ export function DeltaSidebar({
             </button>
             {historyOpen &&
               completedDeltas.map((delta) => (
-                <button
+                <DeltaRow
                   key={delta.id}
-                  onClick={() => onSelectDelta(delta.id)}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                    activeDeltaId === delta.id
-                      ? "bg-accent/10 text-fg"
-                      : "text-fg-subtle hover:bg-bg-hover hover:text-fg-muted"
-                  }`}
-                >
-                  {statusIcon(delta.status)}
-                  <span className="truncate text-[12px]">{delta.name}</span>
-                </button>
+                  deltaId={delta.id}
+                  name={delta.name}
+                  status={delta.status}
+                  isActive={activeDeltaId === delta.id}
+                  isDropdownOpen={openDropdown === delta.id}
+                  onSelect={() => onSelectDelta(delta.id)}
+                  onToggleDropdown={(e) => {
+                    e.stopPropagation();
+                    setOpenDropdown(openDropdown === delta.id ? null : delta.id);
+                  }}
+                  onDelete={() => handleDelete(delta.id)}
+                  compact
+                />
               ))}
           </div>
         )}
@@ -156,6 +180,87 @@ export function DeltaSidebar({
         className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
         onMouseDown={onResizeStart}
       />
+    </div>
+  );
+}
+
+function DeltaRow({
+  deltaId,
+  name,
+  status,
+  isActive,
+  isStreaming,
+  isDropdownOpen,
+  onSelect,
+  onToggleDropdown,
+  onDelete,
+  compact,
+}: {
+  deltaId: string;
+  name: string;
+  status: DeltaStatus;
+  isActive: boolean;
+  isStreaming?: boolean;
+  isDropdownOpen: boolean;
+  onSelect: () => void;
+  onToggleDropdown: (e: React.MouseEvent) => void;
+  onDelete: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onSelect}
+        className={`flex w-full items-center gap-2 px-3 ${compact ? "py-1.5" : "py-2"} text-left transition-colors ${
+          isActive
+            ? "bg-accent/10 text-fg"
+            : compact
+              ? "text-fg-subtle hover:bg-bg-hover hover:text-fg-muted"
+              : "text-fg-muted hover:bg-bg-hover hover:text-fg"
+        }`}
+      >
+        {isStreaming ? (
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-accent" />
+          </span>
+        ) : statusIcon(status)}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className={`truncate ${compact ? "text-[12px]" : "text-[13px]"}`}>{name}</span>
+          {!compact && (
+            <span className="text-[10px] text-fg-subtle">
+              {statusLabel(status)}
+            </span>
+          )}
+        </div>
+        {!compact && <DeltaProgress deltaId={deltaId} />}
+        <div
+          data-delta-dropdown
+          onClick={onToggleDropdown}
+          className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-bg-hover group-hover:opacity-100"
+          title="Delta actions"
+        >
+          <MoreHorizontal size={12} className="text-fg-subtle" />
+        </div>
+      </button>
+
+      {isDropdownOpen && (
+        <div
+          data-delta-dropdown
+          className="absolute right-2 top-full z-50 mt-0.5 min-w-[140px] rounded-md border border-border bg-bg-raised py-1 shadow-lg"
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red hover:bg-bg-hover"
+          >
+            <Trash2 size={12} />
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

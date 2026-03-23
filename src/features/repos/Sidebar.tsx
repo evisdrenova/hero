@@ -77,7 +77,7 @@ function getAvailableExistingBranches(repo: RepoInfo): string[] {
 
 export function Sidebar({
   activeTab,
-  width,
+  width: _width,
   busyTabIds,
   tabs,
   onBranchSelect,
@@ -371,7 +371,7 @@ export function Sidebar({
   if (collapsed) {
     return (
       <>
-        <div className="flex w-[48px] shrink-0 flex-col items-center border-r border-border bg-bg-raised py-3">
+        <div className="flex w-[48px] shrink-0 flex-col items-center bg-bg-raised py-3">
           <button
             onClick={() => setCollapsed(false)}
             className="mb-4 flex h-8 w-8 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-bg-hover hover:text-fg"
@@ -579,11 +579,9 @@ export function Sidebar({
   return (
     <>
       <div
-        className="flex shrink-0 flex-col border-r border-border bg-bg-raised cursor-col-resize"
+        className="flex flex-1 min-h-0 flex-col bg-bg-raised cursor-col-resize"
         onMouseDown={onResizeStart}
         title="Resize repository sidebar"
-        style={{ width }}
-
       >
         <div className="border-b border-border-subtle p-3">
           <div className="flex items-center gap-2">

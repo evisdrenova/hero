@@ -29,7 +29,7 @@ export function PlanPane({
   tasks,
   isPlanning,
   deltaStatus: _deltaStatus,
-  onUpdatePlan,
+  onUpdatePlan: _onUpdatePlan,
   onApprovePlan,
 }: PlanPaneProps) {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
@@ -53,12 +53,15 @@ export function PlanPane({
       <div className="flex-1 overflow-y-auto">
         {/* Plan text */}
         {isPlanning ? (
-          <textarea
-            value={plan}
-            onChange={(e) => onUpdatePlan(e.target.value)}
-            placeholder="The plan will appear here as you discuss with the planning agent..."
-            className="h-full w-full resize-none bg-transparent p-3 font-mono text-xs text-fg placeholder:text-fg-faint focus:outline-none"
-          />
+          <div className="p-3">
+            {plan ? (
+              <pre className="whitespace-pre-wrap font-mono text-xs text-fg-muted">{plan}</pre>
+            ) : (
+              <p className="py-8 text-center text-xs text-fg-subtle">
+                The plan will appear here as you discuss with the planning agent...
+              </p>
+            )}
+          </div>
         ) : (
           <div className="p-3">
             <pre className="whitespace-pre-wrap font-mono text-xs text-fg-muted">{plan}</pre>

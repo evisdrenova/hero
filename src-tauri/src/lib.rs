@@ -829,6 +829,11 @@ fn delta_delete(delta_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn delta_workspace_path(delta_id: String) -> String {
+    delta::delta_dir(&delta_id).to_string_lossy().to_string()
+}
+
+#[tauri::command]
 fn delta_approve_plan(delta_id: String) -> Result<delta::TaskDAG, String> {
     let dag = delta::planner::approve_plan(&delta_id)?;
     delta::orchestrator::initialize_tasks(&delta_id)?;
@@ -998,6 +1003,7 @@ pub fn run() {
             pty::pty_destroy,
             agent::agent_create,
             agent::agent_destroy,
+            agent::agent_write,
             delta_create,
             delta_list,
             delta_get,
@@ -1007,6 +1013,7 @@ pub fn run() {
             delta_get_tasks,
             delta_get_events,
             delta_delete,
+            delta_workspace_path,
             delta_approve_plan,
             delta_answer_question,
             delta_cancel,

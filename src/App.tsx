@@ -31,6 +31,17 @@ import { planWorktreeDeletionCleanup } from "./features/repos/worktree-delete-st
 import { useLiveUpdates } from "./hooks/use-live-updates";
 import type { BranchInfo, CheckpointSummary, WorktreeInfo } from "./lib/ipc";
 import { ArrowLeft, GitCommit } from "lucide-react";
+import { createStreamJsonParser } from "./features/chat/stream-json";
+import type { PermissionRequest } from "./features/chat/stream-json";
+import type { PlanningMessage } from "./features/delta/PlanningChat";
+
+interface PlanningSession {
+  agentSessionId: string | null;
+  messages: PlanningMessage[];
+  pendingText: string;
+  isStreaming: boolean;
+  pendingPermission: PermissionRequest | null;
+}
 
 export interface Tab {
   id: string;
@@ -79,6 +90,15 @@ export default function App() {
   const [deltaLocalMessages, setDeltaLocalMessages] = useState<
     Map<string, Array<{ type: "user_message"; message: string; timestamp: number }>>
   >(() => new Map());
+
+  // Planning agent sessions per delta
+  const [planSessions, setPlanSessions] = useState<Map<string, PlanningSession>>(() => new Map());
+  const planSessionsRef = useRef(planSessions);
+  planSessionsRef.current = planSessions;
+  // Synchronous mapping: agentSessionId → deltaId (updated before React re-renders)
+  const agentToDeltaRef = useRef<Map<string, string>>(new Map());
+  // Keep a stream-json parser per active agent session
+  const planParsersRef = useRef<Map<string, ReturnType<typeof createStreamJsonParser>>>(new Map());
 
   // Maps tab ID → PTY session ID for the chat terminal
   const [chatPtySessions, setChatPtySessions] = useState<Map<string, string>>(
@@ -193,6 +213,112 @@ export default function App() {
       unlistenEvent.then((fn) => fn());
     };
   }, [activeDeltaId, queryClient]);
+
+  // Listen for planning agent output (agent-output / agent-done events)
+  useEffect(() => {
+    const unlistenOutput = listen<{ session_id: string; data: string }>(
+      "agent-output",
+      (event) => {
+        const { session_id, data } = event.payload;
+
+        // Find which delta this agent session belongs to (synchronous ref — no race)
+        const deltaId = agentToDeltaRef.current.get(session_id);
+        if (!deltaId) return;
+
+        // Get or create parser for this session
+        let parser = planParsersRef.current.get(session_id);
+        if (!parser) {
+          const did = deltaId;
+          parser = createStreamJsonParser((req) => {
+            // Permission request received — surface to UI
+            console.log("[planning] permission request:", req);
+            setPlanSessions((prev) => {
+              const next = new Map(prev);
+              const s = next.get(did);
+              if (!s) return prev;
+              next.set(did, { ...s, pendingPermission: req });
+              return next;
+            });
+          });
+          planParsersRef.current.set(session_id, parser);
+        }
+
+        const text = parser.feed(data + "\n");
+        if (text) {
+          const did = deltaId;
+          setPlanSessions((prev) => {
+            const next = new Map(prev);
+            const session = next.get(did);
+            if (!session) return prev;
+            next.set(did, {
+              ...session,
+              pendingText: session.pendingText + text,
+            });
+            return next;
+          });
+        }
+      }
+    );
+
+    const unlistenDone = listen<{ session_id: string; exit_code: number | null }>(
+      "agent-done",
+      (event) => {
+        const { session_id, exit_code } = event.payload;
+        console.log("[planning] agent-done:", session_id, "exit_code:", exit_code);
+
+        // Synchronous ref lookup — no race
+        const deltaId = agentToDeltaRef.current.get(session_id);
+        if (!deltaId) return;
+
+        // Clean up the mapping
+        agentToDeltaRef.current.delete(session_id);
+
+        // Clean up parser
+        planParsersRef.current.delete(session_id);
+
+        // Flush pending text as assistant message, or show error if no output
+        const did = deltaId;
+        setPlanSessions((prev) => {
+          const next = new Map(prev);
+          const session = next.get(did);
+          if (!session) return prev;
+
+          const content = session.pendingText.trim();
+          const finalMessages = [...session.messages];
+
+          if (content) {
+            finalMessages.push({
+              role: "assistant" as const,
+              content,
+              timestamp: Date.now(),
+            });
+          } else {
+            // Agent exited with no output — show error
+            finalMessages.push({
+              role: "assistant" as const,
+              content: "**Error:** The planning agent exited without producing output. This usually means Claude CLI failed to start. Check that `claude` is installed and your API key is set.",
+              timestamp: Date.now(),
+            });
+          }
+
+          next.set(did, {
+            ...session,
+            messages: finalMessages,
+            pendingText: "",
+            isStreaming: false,
+            pendingPermission: null,
+            agentSessionId: null,
+          });
+          return next;
+        });
+      }
+    );
+
+    return () => {
+      unlistenOutput.then((fn) => fn());
+      unlistenDone.then((fn) => fn());
+    };
+  }, []);
 
   // Auto-spawn a PTY shell when the Chat tab is active and no session exists
   useEffect(() => {
@@ -317,6 +443,123 @@ export default function App() {
       }
     },
     [activeTab]
+  );
+
+  // Send a message to the planning agent for a delta
+  const sendPlanningMessage = useCallback(
+    async (deltaId: string, deltaName: string, repoPath: string, msg: string) => {
+      if (!repoPath) {
+        console.error("[planning] No repo path for delta:", deltaId);
+        setPlanSessions((prev) => {
+          const next = new Map(prev);
+          next.set(deltaId, {
+            agentSessionId: null,
+            messages: [
+              { role: "user" as const, content: msg, timestamp: Date.now() },
+              { role: "assistant" as const, content: "**Error:** No repository path configured for this delta.", timestamp: Date.now() },
+            ],
+            pendingText: "",
+            isStreaming: false,
+            pendingPermission: null,
+          });
+          return next;
+        });
+        return;
+      }
+
+      const session = planSessionsRef.current.get(deltaId) ?? {
+        agentSessionId: null,
+        messages: [],
+        pendingText: "",
+        isStreaming: false,
+        pendingPermission: null,
+      };
+
+      if (session.isStreaming) return;
+
+      const newMessages: PlanningMessage[] = [
+        ...session.messages,
+        { role: "user" as const, content: msg, timestamp: Date.now() },
+      ];
+
+      const workspacePath = await invoke<string>("delta_workspace_path", { deltaId });
+      const workingDir = repoPath;
+
+      const isFirstMessage = session.messages.filter((m) => m.role === "user").length === 0;
+      let prompt: string;
+      if (isFirstMessage) {
+        prompt = [
+          "You are a planning agent helping design a software feature.",
+          "Have a conversation with the user to understand what they want to build.",
+          "Ask clarifying questions, propose approaches, and help refine the plan.",
+          "",
+          `IMPORTANT: As the plan takes shape, write it to: ${workspacePath}/plan.md`,
+          "Update this file whenever decisions are made or the plan evolves.",
+          "The plan should be a structured markdown document that other agents can use to implement the feature.",
+          "",
+          `Feature: ${deltaName}`,
+          "",
+          `User says: ${msg}`,
+        ].join("\n");
+      } else {
+        prompt = msg;
+      }
+
+      const args = [
+        "--verbose",
+        "--output-format", "stream-json",
+        "--model", "sonnet",
+      ];
+      if (!isFirstMessage) {
+        args.push("--continue");
+      }
+
+      try {
+        const agentSessionId = await invoke<string>("agent_create", {
+          workingDir,
+          command: "claude-code",
+          prompt,
+          args,
+          envVars: { DELTA_WORKSPACE: workspacePath },
+        });
+
+        console.log("[planning] agent spawned:", agentSessionId, "delta:", deltaId);
+        // Register SYNCHRONOUSLY before React re-render so agent-output listener can find it
+        agentToDeltaRef.current.set(agentSessionId, deltaId);
+        setPlanSessions((prev) => {
+          const next = new Map(prev);
+          next.set(deltaId, {
+            agentSessionId,
+            messages: newMessages,
+            pendingText: "",
+            isStreaming: true,
+            pendingPermission: null,
+          });
+          return next;
+        });
+      } catch (err) {
+        console.error("[planning] agent_create failed:", err);
+        setPlanSessions((prev) => {
+          const next = new Map(prev);
+          next.set(deltaId, {
+            agentSessionId: null,
+            messages: [
+              ...newMessages,
+              {
+                role: "assistant" as const,
+                content: `**Error:** Failed to start planning agent: ${err}`,
+                timestamp: Date.now(),
+              },
+            ],
+            pendingText: "",
+            isStreaming: false,
+            pendingPermission: null,
+          });
+          return next;
+        });
+      }
+    },
+    []
   );
 
   // Clear selected checkpoint when switching branch tabs
@@ -511,18 +754,18 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar with toggle */}
-        <div className="flex h-full shrink-0 flex-col" style={{ width: sidebarWidth }}>
+        <div className="flex h-full shrink-0 flex-col border-r border-border" style={{ width: sidebarWidth }}>
           {/* Sidebar mode toggle */}
-          <div className="flex border-b border-border-subtle bg-bg-raised">
+          <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-bg-raised">
             <button
               onClick={() => setSidebarMode("deltas")}
-              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${sidebarMode === "deltas" ? "text-fg border-b-2 border-accent" : "text-fg-subtle hover:text-fg-muted"}`}
+              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors border-b-2 ${sidebarMode === "deltas" ? "text-fg border-accent" : "text-fg-subtle border-transparent hover:text-fg-muted"}`}
             >
               Deltas
             </button>
             <button
               onClick={() => setSidebarMode("repos")}
-              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${sidebarMode === "repos" ? "text-fg border-b-2 border-accent" : "text-fg-subtle hover:text-fg-muted"}`}
+              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors border-b-2 ${sidebarMode === "repos" ? "text-fg border-accent" : "text-fg-subtle border-transparent hover:text-fg-muted"}`}
             >
               Repos
             </button>
@@ -535,6 +778,13 @@ export default function App() {
               onNewDelta={() => setShowCreateDelta(true)}
               width={sidebarWidth}
               onResizeStart={handleSidebarResizeStart}
+              streamingDeltaIds={
+                new Set(
+                  Array.from(planSessions.entries())
+                    .filter(([, s]) => s.isStreaming)
+                    .map(([id]) => id)
+                )
+              }
             />
           ) : (
             <Sidebar
@@ -601,6 +851,50 @@ export default function App() {
                   tasks={deltaTasks ?? []}
                   dag={deltaDag ?? null}
                   plan={deltaPlan ?? ""}
+                  planningMessages={planSessions.get(activeDeltaId ?? "")?.messages ?? []}
+                  planningPendingText={planSessions.get(activeDeltaId ?? "")?.pendingText ?? ""}
+                  planningIsStreaming={planSessions.get(activeDeltaId ?? "")?.isStreaming ?? false}
+                  pendingPermission={planSessions.get(activeDeltaId ?? "")?.pendingPermission ?? null}
+                  onPermissionResponse={(requestId, allow) => {
+                    if (!activeDeltaId) return;
+                    const session = planSessionsRef.current.get(activeDeltaId);
+                    if (!session?.agentSessionId) return;
+                    const response = allow
+                      ? JSON.stringify({
+                          type: "control_response",
+                          request_id: requestId,
+                          response: {
+                            subtype: "success",
+                            response: {
+                              behavior: "allow",
+                              updatedInput: session.pendingPermission?.input ?? {},
+                            },
+                          },
+                        })
+                      : JSON.stringify({
+                          type: "control_response",
+                          request_id: requestId,
+                          response: {
+                            subtype: "success",
+                            response: {
+                              behavior: "deny",
+                              message: "User denied this action",
+                            },
+                          },
+                        });
+                    invoke("agent_write", {
+                      sessionId: session.agentSessionId,
+                      data: response,
+                    }).catch(console.error);
+                    // Clear the pending permission
+                    setPlanSessions((prev) => {
+                      const next = new Map(prev);
+                      const s = next.get(activeDeltaId);
+                      if (!s) return prev;
+                      next.set(activeDeltaId, { ...s, pendingPermission: null });
+                      return next;
+                    });
+                  }}
                   onAnswerQuestion={(qId, answer, taskId) => {
                     invoke("delta_answer_question", { deltaId: activeDeltaId, questionId: qId, answer, taskId });
                   }}
@@ -612,22 +906,64 @@ export default function App() {
                       updatePlanMutation.mutate({ deltaId: activeDeltaId, content });
                     }
                   }}
-                  onSendMessage={(msg) => {
+                  onSendMessage={async (msg) => {
+                    if (!activeDeltaId || !activeDelta) return;
+
+                    if (activeDelta.status === "planning") {
+                      sendPlanningMessage(
+                        activeDeltaId,
+                        activeDelta.name,
+                        activeDelta.repos[0]?.path ?? "",
+                        msg
+                      );
+                    } else {
+                      // Non-planning mode: add to local messages
+                      const userMsg = {
+                        type: "user_message" as const,
+                        message: msg,
+                        timestamp: Date.now(),
+                      };
+                      setDeltaLocalMessages((prev) => {
+                        const next = new Map(prev);
+                        const existing = next.get(activeDeltaId) ?? [];
+                        next.set(activeDeltaId, [...existing, userMsg]);
+                        return next;
+                      });
+                    }
+                  }}
+                  onStopAgent={() => {
                     if (!activeDeltaId) return;
-                    // Add to local messages so it appears immediately
-                    const userMsg = { type: "user_message" as const, message: msg, timestamp: Date.now() };
-                    setDeltaLocalMessages((prev) => {
+                    const session = planSessionsRef.current.get(activeDeltaId);
+                    if (!session?.agentSessionId) return;
+                    const agentId = session.agentSessionId;
+                    invoke("agent_destroy", { sessionId: agentId }).catch(console.error);
+                    // Clean up refs
+                    agentToDeltaRef.current.delete(agentId);
+                    planParsersRef.current.delete(agentId);
+                    // Flush pending text as message and stop streaming
+                    setPlanSessions((prev) => {
                       const next = new Map(prev);
-                      const existing = next.get(activeDeltaId) ?? [];
-                      next.set(activeDeltaId, [...existing, userMsg]);
+                      const s = next.get(activeDeltaId);
+                      if (!s) return prev;
+                      const finalMessages = [...s.messages];
+                      const content = s.pendingText.trim();
+                      if (content) {
+                        finalMessages.push({
+                          role: "assistant" as const,
+                          content,
+                          timestamp: Date.now(),
+                        });
+                      }
+                      next.set(activeDeltaId, {
+                        ...s,
+                        agentSessionId: null,
+                        messages: finalMessages,
+                        pendingText: "",
+                        isStreaming: false,
+                        pendingPermission: null,
+                      });
                       return next;
                     });
-                    // During planning, append to the plan content
-                    if (activeDelta?.status === "planning") {
-                      const current = deltaPlan ?? "";
-                      const updated = current ? `${current}\n\n${msg}` : msg;
-                      updatePlanMutation.mutate({ deltaId: activeDeltaId, content: updated });
-                    }
                   }}
                 />
               ) : (
@@ -775,10 +1111,19 @@ export default function App() {
       <DeltaCreationModal
         open={showCreateDelta}
         onClose={() => setShowCreateDelta(false)}
-        onCreated={(id) => {
+        onCreated={async (id, description) => {
           setActiveDeltaId(id);
           setSidebarMode("deltas");
           setInnerTab("chat");
+          // Auto-send the description as the first planning message
+          if (description) {
+            const delta = await invoke<{ name: string; repos: Array<{ path: string }> }>(
+              "delta_get",
+              { deltaId: id }
+            );
+            const repoPath = delta.repos[0]?.path ?? "";
+            sendPlanningMessage(id, delta.name, repoPath, description);
+          }
         }}
       />
     </div>

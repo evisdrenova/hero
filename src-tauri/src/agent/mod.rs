@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 
@@ -23,6 +23,7 @@ pub struct AgentDonePayload {
 
 struct AgentSession {
     child: Child,
+    stdin: Option<ChildStdin>,
 }
 
 pub struct AgentState {
@@ -61,6 +62,7 @@ pub fn agent_create(
     command: String,
     prompt: String,
     args: Option<Vec<String>>,
+    env_vars: Option<std::collections::HashMap<String, String>>,
     state: State<'_, Mutex<AgentState>>,
 ) -> Result<String, String> {
     let program = resolve_command(&command);
@@ -69,7 +71,7 @@ pub fn agent_create(
 
     let mut cmd = Command::new(program);
     cmd.current_dir(&working_dir);
-    cmd.stdin(Stdio::null());
+    cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
@@ -77,8 +79,21 @@ pub fn agent_create(
     // inside another claude session (the Tauri app may inherit this)
     cmd.env_remove("CLAUDECODE");
 
+    // Inject extra environment variables if provided
+    if let Some(vars) = env_vars {
+        for (key, value) in vars {
+            cmd.env(key, value);
+        }
+    }
+
     // Add -p flag for non-interactive print mode
     cmd.arg("-p");
+
+    // Enable bidirectional stream-json for permission prompts
+    cmd.arg("--input-format");
+    cmd.arg("stream-json");
+    cmd.arg("--permission-prompt-tool");
+    cmd.arg("stdio");
 
     // Add extra args (e.g., --output-format stream-json)
     if let Some(ref extra_args) = args {
@@ -99,6 +114,10 @@ pub fn agent_create(
 
     let pid = child.id();
     eprintln!("[agent] Spawned pid={}", pid);
+
+    let stdin = child
+        .stdin
+        .take();
 
     let stdout = child
         .stdout
@@ -190,7 +209,7 @@ pub fn agent_create(
     let mut state = state.lock().map_err(|_| "State lock error".to_string())?;
     state.sessions.insert(
         session_id.clone(),
-        AgentSession { child },
+        AgentSession { child, stdin },
     );
 
     Ok(session_id)
@@ -208,4 +227,27 @@ pub fn agent_destroy(
         let _ = session.child.kill();
     }
     Ok(())
+}
+
+/// Write a line of JSON to the agent's stdin (for permission responses, follow-up messages, etc.)
+#[tauri::command]
+pub fn agent_write(
+    session_id: String,
+    data: String,
+    state: State<'_, Mutex<AgentState>>,
+) -> Result<(), String> {
+    eprintln!("[agent] Writing to session {}: {}", session_id, if data.len() > 200 { format!("{}...", &data[..200]) } else { data.clone() });
+    let mut state = state.lock().map_err(|_| "State lock error".to_string())?;
+    if let Some(session) = state.sessions.get_mut(&session_id) {
+        if let Some(ref mut stdin) = session.stdin {
+            stdin.write_all(data.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
+            stdin.write_all(b"\n").map_err(|e| format!("Write error: {}", e))?;
+            stdin.flush().map_err(|e| format!("Flush error: {}", e))?;
+            Ok(())
+        } else {
+            Err("Agent stdin not available".to_string())
+        }
+    } else {
+        Err(format!("No agent session: {}", session_id))
+    }
 }

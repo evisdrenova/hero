@@ -7,7 +7,7 @@ import type { DeltaRepo } from "./types";
 interface DeltaCreationModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: (deltaId: string) => void;
+  onCreated: (deltaId: string, description: string) => void;
 }
 
 export function DeltaCreationModal({ open, onClose, onCreated }: DeltaCreationModalProps) {
@@ -56,10 +56,11 @@ export function DeltaCreationModal({ open, onClose, onCreated }: DeltaCreationMo
         repos: selectedRepos,
         description: description.trim() || undefined,
       });
+      const desc = description.trim();
       setName("");
       setSelectedRepos([]);
       setDescription("");
-      onCreated(delta.id);
+      onCreated(delta.id, desc);
       onClose();
     } catch (err) {
       console.error("[delta] create failed:", err);
