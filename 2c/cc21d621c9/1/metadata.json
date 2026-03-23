@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "2ccc21d621c9",
+  "session_id": "192fba1e-92fe-47d9-a286-6434748de2c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-23T05:53:22.27206Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src-tauri/src/delta/events.rs",
+    "src-tauri/src/delta/orchestrator.rs",
+    "src-tauri/src/lib.rs",
+    "src-tauri/src/pty/mod.rs",
+    "src/features/delta/DeltaCreationModal.tsx",
+    "src/features/delta/DeltaSidebar.tsx",
+    "src/features/delta/QuestionCard.tsx",
+    "src/hooks/use-delta-query.ts",
+    "src/features/delta/ReviewSummary.tsx",
+    "src-tauri/src/delta/planner.rs",
+    "src/features/delta/DeltaSplitView.tsx",
+    "src/features/delta/EventFeed.tsx",
+    "src/features/delta/GateResult.tsx",
+    "src/features/delta/PlanPane.tsx",
+    "src/features/delta/types.ts",
+    "src-tauri/src/delta/gates.rs",
+    "src-tauri/src/delta/mod.rs",
+    "src/App.tsx",
+    "src/features/delta/TaskDAGView.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "712b82e7be97",
+  "checkpoint_transcript_start": 106,
+  "transcript_lines_at_start": 106,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-23T05:53:22.214088Z",
+    "agent_lines": 2368,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2368,
+    "agent_percentage": 100
+  }
+}
