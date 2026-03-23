@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "d614fc7e68bb",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/App.tsx",
+    "src/features/delta/EventFeed.tsx",
+    "src/features/delta/types.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d6/14fc7e68bb/0/metadata.json",
+      "transcript": "/d6/14fc7e68bb/0/full.jsonl",
+      "context": "/d6/14fc7e68bb/0/context.md",
+      "content_hash": "/d6/14fc7e68bb/0/content_hash.txt",
+      "prompt": "/d6/14fc7e68bb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}
