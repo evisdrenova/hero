@@ -6,6 +6,17 @@ import { Sidebar } from "./features/repos/Sidebar";
 import { useReposQuery } from "./hooks/use-tauri-query";
 import { TitleBar } from "./components/TitleBar";
 import { TabBar } from "./components/TabBar";
+import { DeltaSidebar } from "./features/delta/DeltaSidebar";
+import { DeltaCreationModal } from "./features/delta/DeltaCreationModal";
+import { DeltaSplitView } from "./features/delta/DeltaSplitView";
+import {
+  useDeltaQuery,
+  useDeltaPlanQuery,
+  useDeltaDAGQuery,
+  useDeltaTasksQuery,
+  useDeltaEventsQuery,
+  useUpdateDeltaPlanMutation,
+} from "./hooks/use-delta-query";
 import { CheckpointList } from "./features/checkpoints/CheckpointList";
 import { TranscriptView } from "./features/transcripts/TranscriptView";
 import { DiffView, BranchDiffView } from "./features/diff/DiffView";
@@ -60,6 +71,11 @@ export default function App() {
   const [checkpointInnerTab, setCheckpointInnerTab] = useState<
     "transcript" | "diff" | "insights" | "debug"
   >("transcript");
+
+  // Delta state
+  const [sidebarMode, setSidebarMode] = useState<"deltas" | "repos">("repos");
+  const [activeDeltaId, setActiveDeltaId] = useState<string | null>(null);
+  const [showCreateDelta, setShowCreateDelta] = useState(false);
 
   // Maps tab ID → PTY session ID for the chat terminal
   const [chatPtySessions, setChatPtySessions] = useState<Map<string, string>>(
@@ -149,6 +165,31 @@ export default function App() {
 
   // Live updates — watch active repo for checkpoint/session changes
   useLiveUpdates(activeTab.repoPath);
+
+  // Delta queries (conditionally fetched)
+  const { data: activeDelta } = useDeltaQuery(activeDeltaId);
+  const { data: deltaPlan } = useDeltaPlanQuery(activeDeltaId);
+  const { data: deltaDag } = useDeltaDAGQuery(activeDeltaId);
+  const { data: deltaTasks } = useDeltaTasksQuery(activeDeltaId);
+  const { data: deltaEvents } = useDeltaEventsQuery(activeDeltaId);
+  const updatePlanMutation = useUpdateDeltaPlanMutation();
+
+  // Listen for delta events and refresh queries
+  useEffect(() => {
+    if (!activeDeltaId) return;
+
+    const unlistenEvent = listen<{ delta_id: string }>("delta-event", (event) => {
+      if (event.payload.delta_id === activeDeltaId) {
+        queryClient.invalidateQueries({ queryKey: ["delta-events", activeDeltaId] });
+        queryClient.invalidateQueries({ queryKey: ["delta-tasks", activeDeltaId] });
+        queryClient.invalidateQueries({ queryKey: ["delta-plan", activeDeltaId] });
+      }
+    });
+
+    return () => {
+      unlistenEvent.then((fn) => fn());
+    };
+  }, [activeDeltaId, queryClient]);
 
   // Auto-spawn a PTY shell when the Chat tab is active and no session exists
   useEffect(() => {
@@ -466,18 +507,46 @@ export default function App() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          width={sidebarWidth}
-          busyTabIds={busyTabIds}
-          tabs={tabs}
-          onBranchSelect={handleBranchSelect}
-          onBranchDeleted={handleBranchDeleted}
-          onWorktreeDeleted={handleWorktreeDeleted}
-          onWorktreeSelect={handleWorktreeSelect}
-          onResizeStart={handleSidebarResizeStart}
-        />
+        {/* Sidebar with toggle */}
+        <div className="flex h-full shrink-0 flex-col" style={{ width: sidebarWidth }}>
+          {/* Sidebar mode toggle */}
+          <div className="flex border-b border-border-subtle bg-bg-raised">
+            <button
+              onClick={() => setSidebarMode("deltas")}
+              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${sidebarMode === "deltas" ? "text-fg border-b-2 border-accent" : "text-fg-subtle hover:text-fg-muted"}`}
+            >
+              Deltas
+            </button>
+            <button
+              onClick={() => setSidebarMode("repos")}
+              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${sidebarMode === "repos" ? "text-fg border-b-2 border-accent" : "text-fg-subtle hover:text-fg-muted"}`}
+            >
+              Repos
+            </button>
+          </div>
+
+          {sidebarMode === "deltas" ? (
+            <DeltaSidebar
+              activeDeltaId={activeDeltaId}
+              onSelectDelta={setActiveDeltaId}
+              onNewDelta={() => setShowCreateDelta(true)}
+              width={sidebarWidth}
+              onResizeStart={handleSidebarResizeStart}
+            />
+          ) : (
+            <Sidebar
+              activeTab={activeTab}
+              width={sidebarWidth}
+              busyTabIds={busyTabIds}
+              tabs={tabs}
+              onBranchSelect={handleBranchSelect}
+              onBranchDeleted={handleBranchDeleted}
+              onWorktreeDeleted={handleWorktreeDeleted}
+              onWorktreeSelect={handleWorktreeSelect}
+              onResizeStart={handleSidebarResizeStart}
+            />
+          )}
+        </div>
 
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -518,18 +587,45 @@ export default function App() {
 
             {/* Main view */}
             <div className="flex flex-1 overflow-hidden bg-bg">
-              {/* Render one terminal per tab with a PTY — keep mounted, show/hide via CSS */}
-              {Array.from(chatPtySessions.entries()).map(([tabId, ptySessionId]) => (
-                <div
-                  key={tabId}
-                  className="flex flex-1 overflow-hidden"
-                  style={{
-                    display: innerTab === "chat" && tabId === activeTabId ? "flex" : "none",
+              {/* Delta split view when in delta mode */}
+              {innerTab === "chat" && activeDelta && sidebarMode === "deltas" ? (
+                <DeltaSplitView
+                  delta={activeDelta}
+                  events={deltaEvents ?? []}
+                  tasks={deltaTasks ?? []}
+                  dag={deltaDag ?? null}
+                  plan={deltaPlan ?? ""}
+                  onAnswerQuestion={(qId, answer, taskId) => {
+                    invoke("delta_answer_question", { deltaId: activeDeltaId, questionId: qId, answer, taskId });
                   }}
-                >
-                  <XtermTerminal sessionId={ptySessionId} />
-                </div>
-              ))}
+                  onApprovePlan={() => {
+                    invoke("delta_approve_plan", { deltaId: activeDeltaId });
+                  }}
+                  onUpdatePlan={(content) => {
+                    if (activeDeltaId) {
+                      updatePlanMutation.mutate({ deltaId: activeDeltaId, content });
+                    }
+                  }}
+                  onSendMessage={(msg) => {
+                    console.log("[delta] send message:", msg);
+                  }}
+                />
+              ) : (
+                <>
+                  {/* Render one terminal per tab with a PTY — keep mounted, show/hide via CSS */}
+                  {Array.from(chatPtySessions.entries()).map(([tabId, ptySessionId]) => (
+                    <div
+                      key={tabId}
+                      className="flex flex-1 overflow-hidden"
+                      style={{
+                        display: innerTab === "chat" && tabId === activeTabId ? "flex" : "none",
+                      }}
+                    >
+                      <XtermTerminal sessionId={ptySessionId} />
+                    </div>
+                  ))}
+                </>
+              )}
               {innerTab === "checkpoints" && (
                 <>
                   {/* Checkpoint list — always visible when on checkpoints tab */}
@@ -656,6 +752,15 @@ export default function App() {
           </div>
         </div>
       </div>
+      <DeltaCreationModal
+        open={showCreateDelta}
+        onClose={() => setShowCreateDelta(false)}
+        onCreated={(id) => {
+          setActiveDeltaId(id);
+          setSidebarMode("deltas");
+          setInnerTab("chat");
+        }}
+      />
     </div>
   );
 }

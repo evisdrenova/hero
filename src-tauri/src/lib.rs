@@ -1,6 +1,7 @@
 mod agent;
 mod checkpoint;
 mod config;
+mod delta;
 mod git;
 mod pty;
 mod semantic_review;
@@ -769,6 +770,103 @@ fn watch_repo(
     Ok(())
 }
 
+#[tauri::command]
+fn delta_create(
+    name: String,
+    repos: Vec<delta::DeltaRepo>,
+    description: Option<String>,
+) -> Result<delta::DeltaMetadata, String> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let id = format!("delta-{}", ts);
+    let meta = delta::create_delta_workspace(&id, &name, repos)?;
+    if let Some(desc) = description {
+        delta::update_delta_plan(&id, &desc)?;
+    }
+    Ok(meta)
+}
+
+#[tauri::command]
+fn delta_list() -> Result<Vec<delta::DeltaMetadata>, String> {
+    delta::list_deltas()
+}
+
+#[tauri::command]
+fn delta_get(delta_id: String) -> Result<delta::DeltaMetadata, String> {
+    delta::get_delta(&delta_id)
+}
+
+#[tauri::command]
+fn delta_get_plan(delta_id: String) -> Result<String, String> {
+    delta::get_delta_plan(&delta_id)
+}
+
+#[tauri::command]
+fn delta_update_plan(delta_id: String, content: String) -> Result<(), String> {
+    delta::update_delta_plan(&delta_id, &content)
+}
+
+#[tauri::command]
+fn delta_get_dag(delta_id: String) -> Result<Option<delta::TaskDAG>, String> {
+    delta::get_delta_dag(&delta_id)
+}
+
+#[tauri::command]
+fn delta_get_tasks(delta_id: String) -> Result<Vec<delta::TaskState>, String> {
+    delta::get_task_states(&delta_id)
+}
+
+#[tauri::command]
+fn delta_get_events(delta_id: String) -> Result<Vec<delta::DeltaEvent>, String> {
+    delta::get_delta_events(&delta_id)
+}
+
+#[tauri::command]
+fn delta_delete(delta_id: String) -> Result<(), String> {
+    delta::delete_delta(&delta_id)
+}
+
+#[tauri::command]
+fn delta_approve_plan(delta_id: String) -> Result<delta::TaskDAG, String> {
+    let dag = delta::planner::approve_plan(&delta_id)?;
+    delta::orchestrator::initialize_tasks(&delta_id)?;
+    Ok(dag)
+}
+
+#[tauri::command]
+fn delta_answer_question(
+    delta_id: String,
+    question_id: String,
+    answer: String,
+    task_id: String,
+    state: State<'_, Mutex<pty::PtyState>>,
+) -> Result<(), String> {
+    let task_states = delta::get_task_states(&delta_id)?;
+    let pty_session_id = task_states
+        .iter()
+        .find(|t| t.id == task_id)
+        .and_then(|t| t.pty_session_id.as_deref());
+
+    delta::orchestrator::answer_question(
+        &delta_id,
+        &question_id,
+        &answer,
+        &task_id,
+        pty_session_id,
+        &state,
+    )
+}
+
+#[tauri::command]
+fn delta_cancel(
+    delta_id: String,
+    state: State<'_, Mutex<pty::PtyState>>,
+) -> Result<(), String> {
+    delta::orchestrator::cancel_delta(&delta_id, &state)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -865,6 +963,9 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            delta::events::start_delta_watcher(app.handle().clone())
+                .unwrap_or_else(|e| eprintln!("[delta] watcher failed to start: {e}"));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -897,6 +998,18 @@ pub fn run() {
             pty::pty_destroy,
             agent::agent_create,
             agent::agent_destroy,
+            delta_create,
+            delta_list,
+            delta_get,
+            delta_get_plan,
+            delta_update_plan,
+            delta_get_dag,
+            delta_get_tasks,
+            delta_get_events,
+            delta_delete,
+            delta_approve_plan,
+            delta_answer_question,
+            delta_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -65,6 +65,7 @@ pub fn pty_create(
     working_dir: String,
     command: Option<String>,
     args: Option<Vec<String>>,
+    env_vars: Option<HashMap<String, String>>,
     initial_input: Option<String>,
     state: State<'_, Mutex<PtyState>>,
 ) -> Result<String, String> {
@@ -100,6 +101,13 @@ pub fn pty_create(
 
     // Unset CLAUDECODE so nested claude sessions work
     cmd.env_remove("CLAUDECODE");
+
+    // Inject extra environment variables (e.g. DELTA_WORKSPACE) if provided
+    if let Some(vars) = env_vars {
+        for (key, value) in vars {
+            cmd.env(key, value);
+        }
+    }
 
     let child = pair
         .slave
@@ -221,6 +229,29 @@ pub fn pty_destroy(
         let _ = session.child.kill();
     }
     Ok(())
+}
+
+/// Write data to a PTY session's stdin. Used by the delta orchestrator.
+pub fn write_to_session(
+    state: &Mutex<PtyState>,
+    session_id: &str,
+    data: &[u8],
+) -> Result<(), String> {
+    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    let session = guard
+        .sessions
+        .get_mut(session_id)
+        .ok_or_else(|| format!("PTY session not found: {session_id}"))?;
+    session.writer.write_all(data).map_err(|e| e.to_string())
+}
+
+/// Kill a PTY session and remove it from state.
+pub fn kill_session(state: &Mutex<PtyState>, session_id: &str) {
+    if let Ok(mut guard) = state.lock() {
+        if let Some(mut session) = guard.sessions.remove(session_id) {
+            let _ = session.child.kill();
+        }
+    }
 }
 
 #[cfg(test)]
