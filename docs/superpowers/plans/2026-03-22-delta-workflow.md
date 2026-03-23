@@ -83,8 +83,7 @@ use std::path::{Path, PathBuf};
 
 /// Where all delta workspaces live
 fn deltas_root() -> PathBuf {
-    dirs::home_dir()
-        .expect("no home dir")
+    PathBuf::from(std::env::var("HOME").expect("HOME not set"))
         .join(".entire")
         .join("deltas")
 }
@@ -429,13 +428,18 @@ mod delta;
 Add Tauri commands (below existing commands):
 ```rust
 #[tauri::command]
-fn delta_create(name: String, repos: Vec<delta::DeltaRepo>) -> Result<delta::DeltaMetadata, String> {
+fn delta_create(name: String, repos: Vec<delta::DeltaRepo>, description: Option<String>) -> Result<delta::DeltaMetadata, String> {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
     let id = format!("delta-{}", ts);
-    delta::create_delta_workspace(&id, &name, repos)
+    let meta = delta::create_delta_workspace(&id, &name, repos)?;
+    // Write description as initial plan content so the planning agent has context
+    if let Some(desc) = description {
+        delta::update_delta_plan(&id, &format!("# {}\n\n## Objective\n\n{}\n", name, desc))?;
+    }
+    Ok(meta)
 }
 
 #[tauri::command]
@@ -710,8 +714,8 @@ export function useDeltaEventsQuery(deltaId: string | null) {
 export function useCreateDeltaMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, repos }: { name: string; repos: DeltaRepo[] }) =>
-      invoke<DeltaMetadata>("delta_create", { name, repos }),
+    mutationFn: ({ name, repos, description }: { name: string; repos: DeltaRepo[]; description?: string }) =>
+      invoke<DeltaMetadata>("delta_create", { name, repos, description }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deltas"] });
     },
@@ -1235,7 +1239,7 @@ fn run_command_gate(
 ) -> GateResultEntry {
     let result = Command::new("sh")
         .arg("-c")
-        .arg(run_cmd)
+        .arg(format!("timeout {} {}", GATE_TIMEOUT_SECS, run_cmd))
         .current_dir(worktree_path)
         .output();
 
@@ -1530,6 +1534,9 @@ Add to `src-tauri/src/delta/orchestrator.rs`:
 
 ```rust
 /// Answer a blocking question: write the answer event, inject into agent PTY, resume task.
+///
+/// Uses `crate::pty::write_to_session()` to inject the answer into the agent's
+/// PTY stdin — avoids reaching into PtySession internals.
 pub fn answer_question(
     delta_id: &str,
     question_id: &str,
@@ -1552,19 +1559,13 @@ pub fn answer_question(
     };
     write_system_event(delta_id, &event)?;
 
-    // Inject answer into the agent's PTY
+    // Inject answer into the agent's PTY via the public helper
     if let Some(sid) = pty_session_id {
         let message = format!(
             "\n--- ORCHESTRATOR MESSAGE ---\n[Question Answered] {}\nAnswer: {}\n--- END MESSAGE ---\n",
             question_id, answer
         );
-        let state = pty_state.lock().map_err(|e| e.to_string())?;
-        if let Some(session) = state.sessions.get(sid) {
-            let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
-            writer
-                .write_all(message.as_bytes())
-                .map_err(|e| e.to_string())?;
-        }
+        crate::pty::write_to_session(pty_state, sid, message.as_bytes())?;
     }
 
     // Resume the task
@@ -1573,6 +1574,9 @@ pub fn answer_question(
 }
 
 /// Cancel a running delta: destroy all PTY sessions, mark tasks terminal.
+///
+/// Uses `crate::pty::kill_session()` to destroy active PTYs — avoids
+/// reaching into PtySession internals.
 pub fn cancel_delta(
     delta_id: &str,
     pty_state: &std::sync::Mutex<crate::pty::PtyState>,
@@ -1584,11 +1588,7 @@ pub fn cancel_delta(
         }
         // Destroy PTY if active
         if let Some(ref sid) = state.pty_session_id {
-            if let Ok(mut pty) = pty_state.lock() {
-                if let Some(session) = pty.sessions.remove(sid) {
-                    let _ = session.child.lock().map(|mut c| c.kill());
-                }
-            }
+            crate::pty::kill_session(pty_state, sid);
         }
     }
     update_delta_status(delta_id, DeltaStatus::Cancelled)?;
@@ -1635,10 +1635,37 @@ fn delta_cancel(
 
 Register both in `tauri::generate_handler![]`.
 
-- [ ] **Step 3: Verify it compiles**
+- [ ] **Step 3: Add public helper methods to pty/mod.rs**
+
+Add these two public helper methods to `src-tauri/src/pty/mod.rs` so the orchestrator can write to and kill PTY sessions without accessing private internals:
+
+```rust
+/// Write data to a PTY session's stdin. Used by the delta orchestrator to inject messages.
+pub fn write_to_session(
+    state: &std::sync::Mutex<PtyState>,
+    session_id: &str,
+    data: &[u8],
+) -> Result<(), String> {
+    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    let session = guard.sessions.get_mut(session_id)
+        .ok_or_else(|| format!("PTY session not found: {session_id}"))?;
+    session.writer.write_all(data).map_err(|e| e.to_string())
+}
+
+/// Kill a PTY session and remove it from state. Used by the delta orchestrator on cancel.
+pub fn kill_session(state: &std::sync::Mutex<PtyState>, session_id: &str) {
+    if let Ok(mut guard) = state.lock() {
+        if let Some(mut session) = guard.sessions.remove(session_id) {
+            let _ = session.child.kill();
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Verify it compiles**
 
 Run: `cd src-tauri && cargo check`
-Expected: may need to make `PtyState.sessions` and session fields `pub`. If the PTY module uses private fields, add `pub` to `PtyState`, `PtySession`, `writer`, and `child` fields. This is the minimal change — the orchestrator needs to write to agent PTYs and kill processes.
+Expected: compiles cleanly
 
 - [ ] **Step 4: Commit**
 
@@ -1904,6 +1931,7 @@ export function DeltaCreationModal({ open, onClose, onCreated }: DeltaCreationMo
       const delta = await createMutation.mutateAsync({
         name: name.trim(),
         repos: selectedRepos,
+        description: description.trim() || undefined,
       });
       // Reset form
       setName("");
