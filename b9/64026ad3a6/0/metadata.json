@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "b964026ad3a6",
+  "session_id": "1336584e-01e7-4ea6-83a2-b2582bd6d26e",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-23T05:34:36.672669Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/plans/2026-03-22-delta-workflow.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "508b288de674",
+  "token_usage": {
+    "input_tokens": 6277,
+    "cache_creation_tokens": 1219991,
+    "cache_read_tokens": 68124655,
+    "output_tokens": 257839,
+    "api_call_count": 667
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-23T05:34:33.99935Z",
+    "agent_lines": 2997,
+    "human_added": 28,
+    "human_modified": 22,
+    "human_removed": 0,
+    "total_committed": 3047,
+    "agent_percentage": 98.35904168034132
+  }
+}
