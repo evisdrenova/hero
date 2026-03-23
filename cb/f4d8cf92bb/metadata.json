@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "cbf4d8cf92bb",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/specs/2026-03-22-delta-workflow-design.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cb/f4d8cf92bb/0/metadata.json",
+      "transcript": "/cb/f4d8cf92bb/0/full.jsonl",
+      "context": "/cb/f4d8cf92bb/0/context.md",
+      "content_hash": "/cb/f4d8cf92bb/0/content_hash.txt",
+      "prompt": "/cb/f4d8cf92bb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6258,
+    "cache_creation_tokens": 1173656,
+    "cache_read_tokens": 65973710,
+    "output_tokens": 221361,
+    "api_call_count": 651
+  }
+}
