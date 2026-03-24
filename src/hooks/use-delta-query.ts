@@ -24,12 +24,14 @@ export function useDeltaQuery(deltaId: string | null) {
   });
 }
 
-export function useDeltaPlanQuery(deltaId: string | null) {
+export function useDeltaPlanQuery(deltaId: string | null, isStreaming?: boolean) {
   return useQuery<string>({
     queryKey: ["delta-plan", deltaId],
     queryFn: () => invoke("delta_get_plan", { deltaId }),
     enabled: !!deltaId,
     retry: false,
+    // Poll for plan updates while the agent is streaming (it writes plan.md)
+    refetchInterval: isStreaming ? 3000 : false,
   });
 }
 

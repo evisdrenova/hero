@@ -829,8 +829,12 @@ fn delta_delete(delta_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn delta_workspace_path(delta_id: String) -> String {
-    delta::delta_dir(&delta_id).to_string_lossy().to_string()
+fn delta_workspace_path(delta_id: String) -> Result<String, String> {
+    let dir = delta::delta_dir(&delta_id);
+    // Ensure the workspace directory exists so the agent can write plan.md there
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create delta workspace dir: {}", e))?;
+    Ok(dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]

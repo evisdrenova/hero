@@ -196,7 +196,8 @@ export default function App() {
 
   // Delta queries (conditionally fetched)
   const { data: activeDelta } = useDeltaQuery(activeDeltaId);
-  const { data: deltaPlan } = useDeltaPlanQuery(activeDeltaId);
+  const activePlanSession = activeDeltaId ? planSessions.get(activeDeltaId) : undefined;
+  const { data: deltaPlan } = useDeltaPlanQuery(activeDeltaId, activePlanSession?.isStreaming);
   const { data: deltaDag } = useDeltaDAGQuery(activeDeltaId);
   const { data: deltaTasks } = useDeltaTasksQuery(activeDeltaId);
   const { data: deltaEvents } = useDeltaEventsQuery(activeDeltaId);
@@ -577,6 +578,7 @@ export default function App() {
         "--verbose",
         "--output-format", "stream-json",
         "--model", "sonnet",
+        `--add-dir=${workspacePath}`,
       ];
       if (!isFirstMessage) {
         args.push("--continue");
