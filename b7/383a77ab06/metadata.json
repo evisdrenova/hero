@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "b7383a77ab06",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 28,
+  "files_touched": [
+    "package-lock.json",
+    "package.json",
+    "src-tauri/src/agent/mod.rs",
+    "src-tauri/src/config/mod.rs",
+    "src/App.tsx",
+    "src/components/ui/ai-prompt-box.tsx",
+    "src/features/chat/stream-json.ts",
+    "src/features/delta/DeltaSplitView.tsx",
+    "src/features/delta/PlanningChat.tsx",
+    "src/features/repos/Sidebar.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b7/383a77ab06/0/metadata.json",
+      "transcript": "/b7/383a77ab06/0/full.jsonl",
+      "content_hash": "/b7/383a77ab06/0/content_hash.txt",
+      "prompt": "/b7/383a77ab06/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6821,
+    "cache_creation_tokens": 2130811,
+    "cache_read_tokens": 113112095,
+    "output_tokens": 433141,
+    "api_call_count": 1105
+  }
+}
