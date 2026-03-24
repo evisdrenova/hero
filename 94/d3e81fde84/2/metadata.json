@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "94d3e81fde84",
+  "session_id": "2932f66c-cafc-4e6b-bb80-266d0b2547b8",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-24T04:53:14.247009Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src-tauri/src/lib.rs",
+    "src/App.tsx",
+    "src/hooks/use-delta-query.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6",
+  "turn_id": "de3f16b6e1e5",
+  "checkpoint_transcript_start": 338,
+  "transcript_lines_at_start": 338,
+  "token_usage": {
+    "input_tokens": 50,
+    "cache_creation_tokens": 15103,
+    "cache_read_tokens": 5360406,
+    "output_tokens": 6666,
+    "api_call_count": 46
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-24T04:53:13.916517Z",
+    "agent_lines": 12,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "agent_percentage": 100
+  }
+}

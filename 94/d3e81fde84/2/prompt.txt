@@ -1,0 +1,5 @@
+oh this is now faililng right away with: Error: Error: Input must be provided either through stdin or as a prompt argument when using --print
+
+---
+
+this is when i create the delta right away and it sends the message to the chat.
