@@ -32,7 +32,7 @@ import { useLiveUpdates } from "./hooks/use-live-updates";
 import type { BranchInfo, CheckpointSummary, WorktreeInfo } from "./lib/ipc";
 import { ArrowLeft, GitCommit } from "lucide-react";
 import { createStreamJsonParser } from "./features/chat/stream-json";
-import type { PermissionRequest } from "./features/chat/stream-json";
+import type { PermissionRequest, AgentActivity } from "./features/chat/stream-json";
 import type { PlanningMessage } from "./features/delta/PlanningChat";
 
 interface PlanningSession {
@@ -41,6 +41,8 @@ interface PlanningSession {
   pendingText: string;
   isStreaming: boolean;
   pendingPermission: PermissionRequest | null;
+  agentActivity: string | null;
+  streamingStartedAt: number | null;
 }
 
 export interface Tab {
@@ -99,6 +101,9 @@ export default function App() {
   const agentToDeltaRef = useRef<Map<string, string>>(new Map());
   // Keep a stream-json parser per active agent session
   const planParsersRef = useRef<Map<string, ReturnType<typeof createStreamJsonParser>>>(new Map());
+  // Buffer for agent events that arrive before the invoke("agent_create") response
+  // (race condition: Tauri emit can beat invoke response)
+  const pendingAgentEventsRef = useRef<Map<string, Array<{ type: "output" | "done"; payload: unknown }>>>(new Map());
 
   // Maps tab ID → PTY session ID for the chat terminal
   const [chatPtySessions, setChatPtySessions] = useState<Map<string, string>>(
@@ -214,6 +219,127 @@ export default function App() {
     };
   }, [activeDeltaId, queryClient]);
 
+  // Handler for agent output events — extracted so it can be called for buffered events too
+  const handleAgentOutput = useCallback((session_id: string, data: string) => {
+    console.log(`[handleAgentOutput][${Date.now()}] session=${session_id}, data_len=${data.length}, data_preview=${data.slice(0, 120)}`);
+    // Find which delta this agent session belongs to
+    const deltaId = agentToDeltaRef.current.get(session_id);
+    console.log(`[handleAgentOutput][${Date.now()}] deltaId lookup: ${deltaId ?? 'NOT FOUND'}, mapping size=${agentToDeltaRef.current.size}`);
+    if (!deltaId) {
+      // Buffer event — invoke("agent_create") response may not have arrived yet
+      console.warn(`[agent-output][${Date.now()}] Buffering event for unmapped session ${session_id}`);
+      const buf = pendingAgentEventsRef.current.get(session_id) ?? [];
+      buf.push({ type: "output" as const, payload: { session_id, data } });
+      pendingAgentEventsRef.current.set(session_id, buf);
+      return;
+    }
+
+    // Get or create parser for this session
+    let parser = planParsersRef.current.get(session_id);
+    if (!parser) {
+      const did = deltaId;
+      parser = createStreamJsonParser(
+        (req) => {
+          console.log("[planning] permission request:", req);
+          setPlanSessions((prev) => {
+            const next = new Map(prev);
+            const s = next.get(did);
+            if (!s) return prev;
+            next.set(did, { ...s, pendingPermission: req });
+            return next;
+          });
+        },
+        (activity: AgentActivity) => {
+          console.log(`[planning] activity update: ${activity.description}`);
+          setPlanSessions((prev) => {
+            const next = new Map(prev);
+            const s = next.get(did);
+            if (!s) return prev;
+            next.set(did, { ...s, agentActivity: activity.description });
+            return next;
+          });
+        },
+      );
+      planParsersRef.current.set(session_id, parser);
+    }
+
+    const text = parser.feed(data + "\n");
+    console.log(`[handleAgentOutput][${Date.now()}] parser.feed returned: ${text ? text.length + ' chars' : 'empty'}, text_preview=${(text || '').slice(0, 80)}`);
+    if (text) {
+      const did = deltaId;
+      setPlanSessions((prev) => {
+        const next = new Map(prev);
+        const session = next.get(did);
+        if (!session) return prev;
+        next.set(did, {
+          ...session,
+          pendingText: session.pendingText + text,
+        });
+        return next;
+      });
+    }
+  }, []);
+
+  // Handler for agent done events — extracted so it can be called for buffered events too
+  const handleAgentDone = useCallback((session_id: string, exit_code: number | null) => {
+    console.log(`[handleAgentDone][${Date.now()}] session=${session_id}, exit_code=${exit_code}`);
+
+    const deltaId = agentToDeltaRef.current.get(session_id);
+    console.log(`[handleAgentDone][${Date.now()}] deltaId lookup: ${deltaId ?? 'NOT FOUND'}, mapping size=${agentToDeltaRef.current.size}`);
+    if (!deltaId) {
+      // Buffer — invoke("agent_create") response may not have arrived yet
+      console.warn(`[agent-done][${Date.now()}] Buffering done event for unmapped session ${session_id}`);
+      const buf = pendingAgentEventsRef.current.get(session_id) ?? [];
+      buf.push({ type: "done" as const, payload: { session_id, exit_code } });
+      pendingAgentEventsRef.current.set(session_id, buf);
+      return;
+    }
+
+    // Clean up the mapping
+    agentToDeltaRef.current.delete(session_id);
+
+    // Clean up parser
+    planParsersRef.current.delete(session_id);
+
+    // Flush pending text as assistant message, or show error if no output
+    const did = deltaId;
+    setPlanSessions((prev) => {
+      const next = new Map(prev);
+      const session = next.get(did);
+      if (!session) return prev;
+
+      const content = session.pendingText.trim();
+      const finalMessages = [...session.messages];
+
+      if (content) {
+        finalMessages.push({
+          role: "assistant" as const,
+          content,
+          timestamp: Date.now(),
+        });
+      } else {
+        // Agent exited with no output — show error
+        finalMessages.push({
+          role: "assistant" as const,
+          content: "**Error:** The planning agent exited without producing output. This usually means Claude CLI failed to start. Check that `claude` is installed and your API key is set.",
+          timestamp: Date.now(),
+        });
+      }
+
+      next.set(did, {
+        ...session,
+        messages: finalMessages,
+        pendingText: "",
+        isStreaming: false,
+        pendingPermission: null,
+        agentSessionId: null,
+        agentActivity: null,
+        streamingStartedAt: null,
+      });
+      return next;
+    });
+  }, []);
+
   // Listen for planning agent output (agent-output / agent-done events)
   useEffect(() => {
     const unlistenOutput = listen<{ session_id: string; data: string }>(
@@ -221,42 +347,17 @@ export default function App() {
       (event) => {
         const { session_id, data } = event.payload;
 
-        // Find which delta this agent session belongs to (synchronous ref — no race)
-        const deltaId = agentToDeltaRef.current.get(session_id);
-        if (!deltaId) return;
-
-        // Get or create parser for this session
-        let parser = planParsersRef.current.get(session_id);
-        if (!parser) {
-          const did = deltaId;
-          parser = createStreamJsonParser((req) => {
-            // Permission request received — surface to UI
-            console.log("[planning] permission request:", req);
-            setPlanSessions((prev) => {
-              const next = new Map(prev);
-              const s = next.get(did);
-              if (!s) return prev;
-              next.set(did, { ...s, pendingPermission: req });
-              return next;
-            });
-          });
-          planParsersRef.current.set(session_id, parser);
+        // Log every event for debugging
+        try {
+          const parsed = JSON.parse(data);
+          const type = parsed.type ?? "?";
+          const subtype = parsed.subtype ?? "";
+          console.log(`[agent-output] session=${session_id} type=${type}${subtype ? "/" + subtype : ""} len=${data.length}`);
+        } catch {
+          console.log(`[agent-output] session=${session_id} non-json len=${data.length}`);
         }
 
-        const text = parser.feed(data + "\n");
-        if (text) {
-          const did = deltaId;
-          setPlanSessions((prev) => {
-            const next = new Map(prev);
-            const session = next.get(did);
-            if (!session) return prev;
-            next.set(did, {
-              ...session,
-              pendingText: session.pendingText + text,
-            });
-            return next;
-          });
-        }
+        handleAgentOutput(session_id, data);
       }
     );
 
@@ -264,53 +365,7 @@ export default function App() {
       "agent-done",
       (event) => {
         const { session_id, exit_code } = event.payload;
-        console.log("[planning] agent-done:", session_id, "exit_code:", exit_code);
-
-        // Synchronous ref lookup — no race
-        const deltaId = agentToDeltaRef.current.get(session_id);
-        if (!deltaId) return;
-
-        // Clean up the mapping
-        agentToDeltaRef.current.delete(session_id);
-
-        // Clean up parser
-        planParsersRef.current.delete(session_id);
-
-        // Flush pending text as assistant message, or show error if no output
-        const did = deltaId;
-        setPlanSessions((prev) => {
-          const next = new Map(prev);
-          const session = next.get(did);
-          if (!session) return prev;
-
-          const content = session.pendingText.trim();
-          const finalMessages = [...session.messages];
-
-          if (content) {
-            finalMessages.push({
-              role: "assistant" as const,
-              content,
-              timestamp: Date.now(),
-            });
-          } else {
-            // Agent exited with no output — show error
-            finalMessages.push({
-              role: "assistant" as const,
-              content: "**Error:** The planning agent exited without producing output. This usually means Claude CLI failed to start. Check that `claude` is installed and your API key is set.",
-              timestamp: Date.now(),
-            });
-          }
-
-          next.set(did, {
-            ...session,
-            messages: finalMessages,
-            pendingText: "",
-            isStreaming: false,
-            pendingPermission: null,
-            agentSessionId: null,
-          });
-          return next;
-        });
+        handleAgentDone(session_id, exit_code);
       }
     );
 
@@ -318,7 +373,7 @@ export default function App() {
       unlistenOutput.then((fn) => fn());
       unlistenDone.then((fn) => fn());
     };
-  }, []);
+  }, [handleAgentOutput, handleAgentDone]);
 
   // Auto-spawn a PTY shell when the Chat tab is active and no session exists
   useEffect(() => {
@@ -448,6 +503,8 @@ export default function App() {
   // Send a message to the planning agent for a delta
   const sendPlanningMessage = useCallback(
     async (deltaId: string, deltaName: string, repoPath: string, msg: string) => {
+      console.log(`[planning][${Date.now()}] sendPlanningMessage called: deltaId=${deltaId}, deltaName=${deltaName}, repoPath=${repoPath}, msg=${msg.slice(0, 80)}`);
+
       if (!repoPath) {
         console.error("[planning] No repo path for delta:", deltaId);
         setPlanSessions((prev) => {
@@ -461,6 +518,8 @@ export default function App() {
             pendingText: "",
             isStreaming: false,
             pendingPermission: null,
+            agentActivity: null,
+            streamingStartedAt: null,
           });
           return next;
         });
@@ -473,16 +532,25 @@ export default function App() {
         pendingText: "",
         isStreaming: false,
         pendingPermission: null,
+        agentActivity: null,
+        streamingStartedAt: null,
       };
 
-      if (session.isStreaming) return;
+      console.log(`[planning][${Date.now()}] existing session: isStreaming=${session.isStreaming}, agentSessionId=${session.agentSessionId}, messageCount=${session.messages.length}`);
+
+      if (session.isStreaming) {
+        console.warn(`[planning][${Date.now()}] Bailing — session is already streaming`);
+        return;
+      }
 
       const newMessages: PlanningMessage[] = [
         ...session.messages,
         { role: "user" as const, content: msg, timestamp: Date.now() },
       ];
 
+      console.log(`[planning][${Date.now()}] Calling delta_workspace_path...`);
       const workspacePath = await invoke<string>("delta_workspace_path", { deltaId });
+      console.log(`[planning][${Date.now()}] workspacePath=${workspacePath}`);
       const workingDir = repoPath;
 
       const isFirstMessage = session.messages.filter((m) => m.role === "user").length === 0;
@@ -514,6 +582,9 @@ export default function App() {
         args.push("--continue");
       }
 
+      console.log(`[planning][${Date.now()}] About to invoke agent_create: workingDir=${workingDir}, command=claude-code, args=${JSON.stringify(args)}, isFirstMessage=${isFirstMessage}`);
+      console.log(`[planning][${Date.now()}] prompt (first 200 chars): ${prompt.slice(0, 200)}`);
+
       try {
         const agentSessionId = await invoke<string>("agent_create", {
           workingDir,
@@ -523,8 +594,9 @@ export default function App() {
           envVars: { DELTA_WORKSPACE: workspacePath },
         });
 
-        console.log("[planning] agent spawned:", agentSessionId, "delta:", deltaId);
-        // Register SYNCHRONOUSLY before React re-render so agent-output listener can find it
+        console.log(`[planning][${Date.now()}] agent_create returned: agentSessionId=${agentSessionId}, delta=${deltaId}`);
+        console.log(`[planning][${Date.now()}] Setting agentToDeltaRef mapping: ${agentSessionId} → ${deltaId}`);
+        // Register mapping so event listeners can route events to this delta
         agentToDeltaRef.current.set(agentSessionId, deltaId);
         setPlanSessions((prev) => {
           const next = new Map(prev);
@@ -534,11 +606,30 @@ export default function App() {
             pendingText: "",
             isStreaming: true,
             pendingPermission: null,
+            agentActivity: null,
+            streamingStartedAt: Date.now(),
           });
           return next;
         });
+
+        // Replay any events that arrived before the invoke response (race condition fix)
+        const buffered = pendingAgentEventsRef.current.get(agentSessionId);
+        console.log(`[planning][${Date.now()}] Checking buffer for ${agentSessionId}: ${buffered ? buffered.length + ' events' : 'none'}`);
+        if (buffered && buffered.length > 0) {
+          console.log(`[planning][${Date.now()}] Replaying ${buffered.length} buffered events for ${agentSessionId}`);
+          pendingAgentEventsRef.current.delete(agentSessionId);
+          for (const evt of buffered) {
+            if (evt.type === "output") {
+              const { session_id, data } = evt.payload as { session_id: string; data: string };
+              handleAgentOutput(session_id, data);
+            } else if (evt.type === "done") {
+              const { session_id, exit_code } = evt.payload as { session_id: string; exit_code: number | null };
+              handleAgentDone(session_id, exit_code);
+            }
+          }
+        }
       } catch (err) {
-        console.error("[planning] agent_create failed:", err);
+        console.error(`[planning][${Date.now()}] agent_create FAILED:`, err);
         setPlanSessions((prev) => {
           const next = new Map(prev);
           next.set(deltaId, {
@@ -554,6 +645,8 @@ export default function App() {
             pendingText: "",
             isStreaming: false,
             pendingPermission: null,
+            agentActivity: null,
+            streamingStartedAt: null,
           });
           return next;
         });
@@ -756,22 +849,22 @@ export default function App() {
         {/* Sidebar with toggle */}
         <div className="flex h-full shrink-0 flex-col border-r border-border" style={{ width: sidebarWidth }}>
           {/* Sidebar mode toggle */}
-          <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-bg-raised">
+          <div className="flex h-9 shrink-0 items-center border-b border-border bg-bg-raised">
             <button
               onClick={() => setSidebarMode("deltas")}
-              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors border-b-2 ${sidebarMode === "deltas" ? "text-fg border-accent" : "text-fg-subtle border-transparent hover:text-fg-muted"}`}
+              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors rounded-md mx-1 my-1 ${sidebarMode === "deltas" ? "text-fg bg-bg-hover" : "text-fg-subtle hover:text-fg-muted"}`}
             >
               Deltas
             </button>
             <button
               onClick={() => setSidebarMode("repos")}
-              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors border-b-2 ${sidebarMode === "repos" ? "text-fg border-accent" : "text-fg-subtle border-transparent hover:text-fg-muted"}`}
+              className={`flex-1 flex items-center justify-center text-[10px] font-medium transition-colors rounded-md mx-1 my-1 ${sidebarMode === "repos" ? "text-fg bg-bg-hover" : "text-fg-subtle hover:text-fg-muted"}`}
             >
               Repos
             </button>
           </div>
 
-          {sidebarMode === "deltas" ? (
+          <div className={`flex flex-1 min-h-0 flex-col ${sidebarMode === "deltas" ? "" : "hidden"}`}>
             <DeltaSidebar
               activeDeltaId={activeDeltaId}
               onSelectDelta={setActiveDeltaId}
@@ -786,7 +879,8 @@ export default function App() {
                 )
               }
             />
-          ) : (
+          </div>
+          <div className={`flex flex-1 min-h-0 flex-col ${sidebarMode === "repos" ? "" : "hidden"}`}>
             <Sidebar
               activeTab={activeTab}
               width={sidebarWidth}
@@ -798,51 +892,15 @@ export default function App() {
               onWorktreeSelect={handleWorktreeSelect}
               onResizeStart={handleSidebarResizeStart}
             />
-          )}
+          </div>
         </div>
 
         {/* Main content */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <TabBar
-            tabs={tabsWithSessions}
-            activeTabId={activeTabId}
-            busyTabIds={busyTabIds}
-            onSelectTab={setActiveTabId}
-            onCloseTab={handleCloseTab}
-            onAddAgentTab={(agent) => handleSendToAgent(agent, "")}
-            onAddParallelAgent={handleSpawnParallelAgent}
-          />
-
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {/* Inner tabs */}
-            <div className="flex gap-0 border-b border-border-subtle bg-bg px-5 pt-3">
-              {(["chat", "checkpoints", "diff", "insights", "debug"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setInnerTab(tab)}
-                  className={`border-b-2 px-4 pb-2 text-xs font-medium capitalize transition-colors ${innerTab === tab
-                    ? "border-accent text-fg"
-                    : "border-transparent text-fg-subtle hover:text-fg-muted"
-                    }`}
-                >
-                  {tab === "chat"
-                    ? "Chat"
-                    : tab === "checkpoints"
-                      ? "Checkpoints"
-                      : tab === "diff"
-                        ? "Diff"
-                        : tab === "insights"
-                          ? "Insights"
-                          : "Debug"}
-                </button>
-              ))}
-            </div>
-
-            {/* Main view */}
+          {/* Delta mode: show DeltaSplitView directly, no TabBar/inner tabs */}
+          {activeDelta && sidebarMode === "deltas" ? (
             <div className="flex flex-1 overflow-hidden bg-bg">
-              {/* Delta split view when in delta mode */}
-              {innerTab === "chat" && activeDelta && sidebarMode === "deltas" ? (
-                <DeltaSplitView
+              <DeltaSplitView
                   delta={activeDelta}
                   events={[
                     ...(deltaEvents ?? []),
@@ -854,6 +912,8 @@ export default function App() {
                   planningMessages={planSessions.get(activeDeltaId ?? "")?.messages ?? []}
                   planningPendingText={planSessions.get(activeDeltaId ?? "")?.pendingText ?? ""}
                   planningIsStreaming={planSessions.get(activeDeltaId ?? "")?.isStreaming ?? false}
+                  agentActivity={planSessions.get(activeDeltaId ?? "")?.agentActivity ?? null}
+                  streamingStartedAt={planSessions.get(activeDeltaId ?? "")?.streamingStartedAt ?? null}
                   pendingPermission={planSessions.get(activeDeltaId ?? "")?.pendingPermission ?? null}
                   onPermissionResponse={(requestId, allow) => {
                     if (!activeDeltaId) return;
@@ -907,9 +967,11 @@ export default function App() {
                     }
                   }}
                   onSendMessage={async (msg) => {
+                    console.log(`[onSendMessage][${Date.now()}] msg=${msg.slice(0, 80)}, activeDeltaId=${activeDeltaId}, status=${activeDelta?.status}, repoPath=${activeDelta?.repos[0]?.path}`);
                     if (!activeDeltaId || !activeDelta) return;
 
                     if (activeDelta.status === "planning") {
+                      console.log(`[onSendMessage][${Date.now()}] Calling sendPlanningMessage...`);
                       sendPlanningMessage(
                         activeDeltaId,
                         activeDelta.name,
@@ -961,151 +1023,195 @@ export default function App() {
                         pendingText: "",
                         isStreaming: false,
                         pendingPermission: null,
+                        agentActivity: null,
+                        streamingStartedAt: null,
                       });
                       return next;
                     });
                   }}
                 />
-              ) : (
-                <>
-                  {/* Render one terminal per tab with a PTY — keep mounted, show/hide via CSS */}
-                  {Array.from(chatPtySessions.entries()).map(([tabId, ptySessionId]) => (
-                    <div
-                      key={tabId}
-                      className="flex flex-1 overflow-hidden"
-                      style={{
-                        display: innerTab === "chat" && tabId === activeTabId ? "flex" : "none",
-                      }}
+            </div>
+          ) : (
+            <>
+              <TabBar
+                tabs={tabsWithSessions}
+                activeTabId={activeTabId}
+                busyTabIds={busyTabIds}
+                onSelectTab={setActiveTabId}
+                onCloseTab={handleCloseTab}
+                onAddAgentTab={(agent) => handleSendToAgent(agent, "")}
+                onAddParallelAgent={handleSpawnParallelAgent}
+              />
+
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                {/* Inner tabs */}
+                <div className="flex gap-1 border-b border-border-subtle bg-bg px-4 py-2">
+                  {(["chat", "checkpoints", "diff", "insights", "debug"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setInnerTab(tab)}
+                      className={`px-3 py-1 text-xs font-medium capitalize transition-colors rounded-md ${innerTab === tab
+                        ? "bg-bg-hover text-fg"
+                        : "text-fg-subtle hover:text-fg-muted"
+                        }`}
                     >
-                      <XtermTerminal sessionId={ptySessionId} />
-                    </div>
+                      {tab === "chat"
+                        ? "Chat"
+                        : tab === "checkpoints"
+                          ? "Checkpoints"
+                          : tab === "diff"
+                            ? "Diff"
+                            : tab === "insights"
+                              ? "Insights"
+                              : "Debug"}
+                    </button>
                   ))}
-                </>
-              )}
-              {innerTab === "checkpoints" && (
-                <>
-                  {/* Checkpoint list — always visible when on checkpoints tab */}
-                  <div
-                    className={`min-w-0 overflow-y-auto overflow-x-hidden ${selectedCheckpoint
-                      ? "w-[320px] shrink-0 border-r border-border-subtle"
-                      : "flex-1"
-                      }`}
-                  >
-                    <CheckpointList
-                      repoPath={activeTab.repoPath}
-                      branch={activeTab.branch}
-                      onSelectCheckpoint={(cp) => {
-                        setSelectedCheckpoint(cp);
-                        setCheckpointInnerTab("transcript");
-                      }}
-                    />
-                  </div>
+                </div>
 
-                  {/* Checkpoint detail panel */}
-                  {selectedCheckpoint && (
-                    <div className="flex flex-1 flex-col overflow-hidden">
-                      {/* Detail header */}
-                      <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-2.5">
-                        <button
-                          onClick={() => setSelectedCheckpoint(null)}
-                          className="flex items-center gap-1.5 text-xs text-fg-subtle transition-colors hover:text-fg"
+                {/* Main view */}
+                <div className="flex flex-1 overflow-hidden bg-bg">
+                  {innerTab === "chat" && (
+                    <>
+                      {/* Render one terminal per tab with a PTY — keep mounted, show/hide via CSS */}
+                      {Array.from(chatPtySessions.entries()).map(([tabId, ptySessionId]) => (
+                        <div
+                          key={tabId}
+                          className="flex flex-1 overflow-hidden"
+                          style={{
+                            display: tabId === activeTabId ? "flex" : "none",
+                          }}
                         >
-                          <ArrowLeft size={14} />
-                        </button>
-                        <GitCommit size={14} className="text-fg-subtle" />
-                        <span className="truncate text-xs font-medium text-fg">
-                          {selectedCheckpoint.commit_message || "Untitled"}
-                        </span>
-                        <span className="font-mono text-xs text-fg-subtle">
-                          {selectedCheckpoint.commit_sha
-                            ? selectedCheckpoint.commit_sha.slice(0, 7)
-                            : selectedCheckpoint.checkpoint_id.slice(0, 7)}
-                        </span>
+                          <XtermTerminal sessionId={ptySessionId} />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {innerTab === "checkpoints" && (
+                    <>
+                      {/* Checkpoint list — always visible when on checkpoints tab */}
+                      <div
+                        className={`min-w-0 overflow-y-auto overflow-x-hidden ${selectedCheckpoint
+                          ? "w-[320px] shrink-0 border-r border-border-subtle"
+                          : "flex-1"
+                          }`}
+                      >
+                        <CheckpointList
+                          repoPath={activeTab.repoPath}
+                          branch={activeTab.branch}
+                          onSelectCheckpoint={(cp) => {
+                            setSelectedCheckpoint(cp);
+                            setCheckpointInnerTab("transcript");
+                          }}
+                        />
                       </div>
 
-                      {/* Checkpoint sub-tabs */}
-                      <div className="flex gap-0 border-b border-border-subtle bg-bg px-4 pt-2">
-                        {(["transcript", "diff", "insights", "debug"] as const).map(
-                          (tab) => (
+                      {/* Checkpoint detail panel */}
+                      {selectedCheckpoint && (
+                        <div className="flex flex-1 flex-col overflow-hidden">
+                          {/* Detail header */}
+                          <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-2.5">
                             <button
-                              key={tab}
-                              onClick={() => setCheckpointInnerTab(tab)}
-                              className={`border-b-2 px-3 pb-1.5 text-[11px] font-medium capitalize transition-colors ${checkpointInnerTab === tab
-                                ? "border-accent text-fg"
-                                : "border-transparent text-fg-subtle hover:text-fg-muted"
-                                }`}
+                              onClick={() => setSelectedCheckpoint(null)}
+                              className="flex items-center gap-1.5 text-xs text-fg-subtle transition-colors hover:text-fg"
                             >
-                              {tab === "transcript"
-                                ? "Transcript"
-                                : tab === "diff"
-                                  ? "Diff"
-                                  : tab === "insights"
-                                    ? "Insights"
-                                    : "Debug"}
+                              <ArrowLeft size={14} />
                             </button>
-                          )
-                        )}
-                      </div>
+                            <GitCommit size={14} className="text-fg-subtle" />
+                            <span className="truncate text-xs font-medium text-fg">
+                              {selectedCheckpoint.commit_message || "Untitled"}
+                            </span>
+                            <span className="font-mono text-xs text-fg-subtle">
+                              {selectedCheckpoint.commit_sha
+                                ? selectedCheckpoint.commit_sha.slice(0, 7)
+                                : selectedCheckpoint.checkpoint_id.slice(0, 7)}
+                            </span>
+                          </div>
 
-                      {/* Checkpoint detail content */}
-                      <div className="flex-1 overflow-y-auto">
-                        {checkpointInnerTab === "transcript" && (
-                          <TranscriptView
-                            repoPath={activeTab.repoPath}
-                            checkpoint={selectedCheckpoint}
-                          />
-                        )}
-                        {checkpointInnerTab === "diff" && (
-                          <DiffView
-                            repoPath={activeTab.repoPath}
-                            checkpoint={selectedCheckpoint}
-                            onSendToAgent={handleSendToAgent}
-                          />
-                        )}
-                        {checkpointInnerTab === "insights" && (
-                          <CheckpointInsightsContainer
-                            repoPath={activeTab.repoPath}
-                            checkpoint={selectedCheckpoint}
-                          />
-                        )}
-                        {checkpointInnerTab === "debug" && (
-                          <CheckpointDebugContainer
-                            repoPath={activeTab.repoPath}
-                            checkpoint={selectedCheckpoint}
-                          />
-                        )}
-                      </div>
+                          {/* Checkpoint sub-tabs */}
+                          <div className="flex gap-0 border-b border-border-subtle bg-bg px-4 pt-2">
+                            {(["transcript", "diff", "insights", "debug"] as const).map(
+                              (tab) => (
+                                <button
+                                  key={tab}
+                                  onClick={() => setCheckpointInnerTab(tab)}
+                                  className={`px-3 py-1 text-[11px] font-medium capitalize transition-colors rounded-md ${checkpointInnerTab === tab
+                                    ? "bg-bg-hover text-fg"
+                                    : "text-fg-subtle hover:text-fg-muted"
+                                    }`}
+                                >
+                                  {tab === "transcript"
+                                    ? "Transcript"
+                                    : tab === "diff"
+                                      ? "Diff"
+                                      : tab === "insights"
+                                        ? "Insights"
+                                        : "Debug"}
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          {/* Checkpoint detail content */}
+                          <div className="flex-1 overflow-y-auto">
+                            {checkpointInnerTab === "transcript" && (
+                              <TranscriptView
+                                repoPath={activeTab.repoPath}
+                                checkpoint={selectedCheckpoint}
+                              />
+                            )}
+                            {checkpointInnerTab === "diff" && (
+                              <DiffView
+                                repoPath={activeTab.repoPath}
+                                checkpoint={selectedCheckpoint}
+                                onSendToAgent={handleSendToAgent}
+                              />
+                            )}
+                            {checkpointInnerTab === "insights" && (
+                              <CheckpointInsightsContainer
+                                repoPath={activeTab.repoPath}
+                                checkpoint={selectedCheckpoint}
+                              />
+                            )}
+                            {checkpointInnerTab === "debug" && (
+                              <CheckpointDebugContainer
+                                repoPath={activeTab.repoPath}
+                                checkpoint={selectedCheckpoint}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {innerTab === "diff" && (
+                    <div className="flex flex-1 overflow-hidden">
+                      <BranchDiffView
+                        repoPath={activeTab.repoPath}
+                        branch={activeTab.branch}
+                        onSendToAgent={handleSendToAgent}
+                      />
                     </div>
                   )}
-                </>
-              )}
-              {innerTab === "diff" && (
-                <div className="flex flex-1 overflow-hidden">
-                  <BranchDiffView
-                    repoPath={activeTab.repoPath}
-                    branch={activeTab.branch}
-                    onSendToAgent={handleSendToAgent}
-                  />
+                  {innerTab === "insights" && (
+                    <div className="flex flex-1 overflow-y-auto">
+                      <BranchInsightsContainer
+                        repoPath={activeTab.repoPath}
+                        branch={activeTab.branch}
+                      />
+                    </div>
+                  )}
+                  {innerTab === "debug" && (
+                    <div className="flex flex-1 overflow-y-auto">
+                      <BranchDebugContainer
+                        repoPath={activeTab.repoPath}
+                        branch={activeTab.branch}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-              {innerTab === "insights" && (
-                <div className="flex flex-1 overflow-y-auto">
-                  <BranchInsightsContainer
-                    repoPath={activeTab.repoPath}
-                    branch={activeTab.branch}
-                  />
-                </div>
-              )}
-              {innerTab === "debug" && (
-                <div className="flex flex-1 overflow-y-auto">
-                  <BranchDebugContainer
-                    repoPath={activeTab.repoPath}
-                    branch={activeTab.branch}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
       <DeltaCreationModal

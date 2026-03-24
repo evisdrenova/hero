@@ -67,11 +67,14 @@ pub fn agent_create(
 ) -> Result<String, String> {
     let program = resolve_command(&command);
 
-    eprintln!("[agent] Spawning: {} -p {:?} {:?}", program, args, prompt);
+    eprintln!("[agent] === agent_create START ===");
+    eprintln!("[agent] program={}, working_dir={}", program, working_dir);
+    eprintln!("[agent] args={:?}", args);
+    eprintln!("[agent] prompt (first 200 chars): {}", &prompt[..prompt.len().min(200)]);
 
     let mut cmd = Command::new(program);
     cmd.current_dir(&working_dir);
-    cmd.stdin(Stdio::piped());
+    cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
@@ -80,20 +83,15 @@ pub fn agent_create(
     cmd.env_remove("CLAUDECODE");
 
     // Inject extra environment variables if provided
-    if let Some(vars) = env_vars {
+    if let Some(ref vars) = env_vars {
         for (key, value) in vars {
+            eprintln!("[agent] env: {}={}", key, if key.contains("KEY") || key.contains("SECRET") { "***" } else { value.as_str() });
             cmd.env(key, value);
         }
     }
 
     // Add -p flag for non-interactive print mode
     cmd.arg("-p");
-
-    // Enable bidirectional stream-json for permission prompts
-    cmd.arg("--input-format");
-    cmd.arg("stream-json");
-    cmd.arg("--permission-prompt-tool");
-    cmd.arg("stdio");
 
     // Add extra args (e.g., --output-format stream-json)
     if let Some(ref extra_args) = args {
@@ -105,6 +103,12 @@ pub fn agent_create(
     // The prompt is the last argument
     cmd.arg(&prompt);
 
+    // Log the full command for debugging
+    eprintln!("[agent] Full command: {} -p {} \"<prompt>\"",
+        program,
+        args.as_ref().map(|a| a.join(" ")).unwrap_or_default()
+    );
+
     let mut child = cmd
         .spawn()
         .map_err(|e| {
@@ -113,7 +117,7 @@ pub fn agent_create(
         })?;
 
     let pid = child.id();
-    eprintln!("[agent] Spawned pid={}", pid);
+    eprintln!("[agent] Spawned pid={}, returning session_id to frontend now", pid);
 
     let stdin = child
         .stdin
@@ -138,33 +142,46 @@ pub fn agent_create(
         let app_handle = app.clone();
 
         thread::spawn(move || {
-            eprintln!("[agent:{}] stdout reader started", id);
+            let start = std::time::Instant::now();
+            eprintln!("[agent:{}] stdout reader started (t=0ms)", id);
             let reader = BufReader::new(stdout);
             let mut line_count = 0u64;
             for line in reader.lines() {
+                let elapsed = start.elapsed().as_millis();
                 match line {
                     Ok(text) if !text.is_empty() => {
                         line_count += 1;
-                        if line_count <= 5 {
-                            eprintln!("[agent:{}] stdout line {}: {}", id, line_count,
-                                if text.len() > 200 { format!("{}...", &text[..200]) } else { text.clone() });
-                        }
-                        let _ = app_handle.emit(
+                        // Log every line with type info for debugging
+                        let type_hint = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                            let t = v.get("type").and_then(|t| t.as_str()).unwrap_or("?");
+                            let sub = v.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+                            if sub.is_empty() { t.to_string() } else { format!("{}/{}", t, sub) }
+                        } else {
+                            "non-json".to_string()
+                        };
+                        eprintln!("[agent:{}] stdout line {}: type={} len={} (t={}ms)", id, line_count, type_hint, text.len(), elapsed);
+                        let emit_result = app_handle.emit(
                             "agent-output",
                             AgentOutputPayload {
                                 session_id: id.clone(),
                                 data: text,
                             },
                         );
+                        if let Err(e) = emit_result {
+                            eprintln!("[agent:{}] EMIT FAILED: {} (t={}ms)", id, e, elapsed);
+                        }
                     }
-                    Ok(_) => {} // skip empty lines
+                    Ok(_) => {
+                        eprintln!("[agent:{}] stdout: empty line skipped (t={}ms)", id, elapsed);
+                    }
                     Err(e) => {
-                        eprintln!("[agent:{}] stdout error: {}", id, e);
+                        eprintln!("[agent:{}] stdout error: {} (t={}ms)", id, e, elapsed);
                         break;
                     }
                 }
             }
-            eprintln!("[agent:{}] stdout EOF after {} lines", id, line_count);
+            let elapsed = start.elapsed().as_millis();
+            eprintln!("[agent:{}] stdout EOF after {} lines (t={}ms) — emitting agent-done", id, line_count, elapsed);
             let _ = app_handle.emit("agent-done", AgentDonePayload {
                 session_id: id,
                 exit_code: None,
@@ -178,12 +195,16 @@ pub fn agent_create(
         let app_handle = app.clone();
 
         thread::spawn(move || {
-            eprintln!("[agent:{}] stderr reader started", id);
+            let start = std::time::Instant::now();
+            eprintln!("[agent:{}] stderr reader started (t=0ms)", id);
             let reader = BufReader::new(stderr);
+            let mut stderr_line_count = 0u64;
             for line in reader.lines() {
+                let elapsed = start.elapsed().as_millis();
                 match line {
                     Ok(text) if !text.is_empty() => {
-                        eprintln!("[agent:{}] STDERR: {}", id, text);
+                        stderr_line_count += 1;
+                        eprintln!("[agent:{}] STDERR line {}: {} (t={}ms)", id, stderr_line_count, text, elapsed);
                         let _ = app_handle.emit(
                             "agent-output",
                             AgentOutputPayload {
@@ -197,12 +218,13 @@ pub fn agent_create(
                     }
                     Ok(_) => {}
                     Err(e) => {
-                        eprintln!("[agent:{}] stderr error: {}", id, e);
+                        eprintln!("[agent:{}] stderr error: {} (t={}ms)", id, e, elapsed);
                         break;
                     }
                 }
             }
-            eprintln!("[agent:{}] stderr EOF", id);
+            let elapsed = start.elapsed().as_millis();
+            eprintln!("[agent:{}] stderr EOF after {} lines (t={}ms)", id, stderr_line_count, elapsed);
         });
     }
 

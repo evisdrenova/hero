@@ -177,7 +177,9 @@ export function Sidebar({
     if (!selected) return;
     registerMutation.mutate(selected, {
       onError: (mutationError) => {
-        setSidebarError(getErrorMessage(mutationError));
+        const msg = getErrorMessage(mutationError);
+        console.error("Failed to register repo:", msg);
+        setSidebarError(msg);
       },
     });
   }
@@ -579,9 +581,7 @@ export function Sidebar({
   return (
     <>
       <div
-        className="flex flex-1 min-h-0 flex-col bg-bg-raised cursor-col-resize"
-        onMouseDown={onResizeStart}
-        title="Resize repository sidebar"
+        className="flex flex-1 min-h-0 flex-col bg-bg-raised"
       >
         <div className="border-b border-border-subtle p-3">
           <div className="flex items-center gap-2">

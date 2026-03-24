@@ -83,9 +83,21 @@ pub fn register_repo(path: &str) -> Result<(), String> {
     // Validate it's a git repo
     git2::Repository::open(p).map_err(|_| "Not a git repository".to_string())?;
 
-    // Validate .entire is enabled
+    // If .entire/settings.json doesn't exist or isn't enabled, create it
     if !is_entire_enabled(path) {
-        return Err("Repository does not have Entire enabled (.entire/settings.json with enabled: true)".to_string());
+        let entire_dir = p.join(".entire");
+        fs::create_dir_all(&entire_dir)
+            .map_err(|e| format!("Failed to create .entire directory: {}", e))?;
+        let settings = EntireSettings {
+            enabled: Some(true),
+            local_dev: None,
+            log_level: None,
+            telemetry: None,
+        };
+        let content = serde_json::to_string_pretty(&settings)
+            .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+        fs::write(entire_dir.join("settings.json"), content)
+            .map_err(|e| format!("Failed to write settings: {}", e))?;
     }
 
     // Canonicalize to avoid duplicates from different path representations

@@ -15,6 +15,8 @@ interface DeltaSplitViewProps {
   planningMessages: PlanningMessage[];
   planningPendingText: string;
   planningIsStreaming: boolean;
+  agentActivity: string | null;
+  streamingStartedAt: number | null;
   pendingPermission: PermissionRequest | null;
   onPermissionResponse: (requestId: string, allow: boolean) => void;
   onAnswerQuestion: (questionId: string, answer: string, taskId: string) => void;
@@ -33,6 +35,8 @@ export function DeltaSplitView({
   planningMessages,
   planningPendingText,
   planningIsStreaming,
+  agentActivity,
+  streamingStartedAt,
   pendingPermission,
   onPermissionResponse,
   onAnswerQuestion,
@@ -74,6 +78,8 @@ export function DeltaSplitView({
             messages={planningMessages}
             pendingText={planningPendingText}
             isStreaming={planningIsStreaming}
+            agentActivity={agentActivity}
+            streamingStartedAt={streamingStartedAt}
             pendingPermission={pendingPermission}
             onPermissionResponse={onPermissionResponse}
             onSendMessage={onSendMessage}

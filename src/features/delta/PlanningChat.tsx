@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Square, ShieldCheck, ShieldX } from "lucide-react";
 import type { PermissionRequest } from "../chat/stream-json";
+import { PromptInputBox } from "../../components/ui/ai-prompt-box";
 
 export interface PlanningMessage {
   role: "user" | "assistant";
@@ -14,6 +15,8 @@ interface PlanningChatProps {
   messages: PlanningMessage[];
   pendingText: string;
   isStreaming: boolean;
+  agentActivity: string | null;
+  streamingStartedAt: number | null;
   pendingPermission: PermissionRequest | null;
   onPermissionResponse: (requestId: string, allow: boolean) => void;
   onSendMessage: (message: string) => void;
@@ -24,43 +27,18 @@ export function PlanningChat({
   messages,
   pendingText,
   isStreaming,
+  agentActivity,
+  streamingStartedAt,
   pendingPermission,
   onPermissionResponse,
   onSendMessage,
   onStopAgent,
 }: PlanningChatProps) {
-  const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, pendingText]);
-
-  // Auto-resize textarea
-  const resizeTextarea = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
-  }, []);
-
-  useEffect(() => {
-    resizeTextarea();
-  }, [input, resizeTextarea]);
-
-  const handleSend = () => {
-    if (!input.trim() || isStreaming) return;
-    onSendMessage(input.trim());
-    setInput("");
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -93,7 +71,7 @@ export function PlanningChat({
         )}
 
         {isStreaming && !pendingText && !pendingPermission && (
-          <ThinkingIndicator />
+          <ActivityIndicator activity={agentActivity} startedAt={streamingStartedAt} />
         )}
 
         {pendingPermission && (
@@ -115,7 +93,8 @@ export function PlanningChat({
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
             </span>
-            <span>Planning agent is responding...</span>
+            <span>{agentActivity ?? "Planning agent is responding..."}</span>
+            {streamingStartedAt && <ElapsedTimer startedAt={streamingStartedAt} />}
           </div>
           <button
             onClick={onStopAgent}
@@ -129,27 +108,53 @@ export function PlanningChat({
       )}
 
       {/* Input */}
-      <div className="shrink-0 border-t border-border-subtle bg-bg px-3 py-2">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isStreaming ? "Waiting for response..." : "Describe your feature or answer questions..."}
-            disabled={isStreaming}
-            rows={1}
-            className="flex-1 resize-none rounded border border-border bg-bg px-2.5 py-1.5 text-xs leading-relaxed text-fg placeholder:text-fg-faint focus:border-accent focus:outline-none disabled:opacity-50"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isStreaming}
-            className="shrink-0 rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-          >
-            Send
-          </button>
-        </div>
+      <div className="shrink-0 px-3 py-2">
+        <PromptInputBox
+          onSend={(message) => {
+            if (message.trim() && !isStreaming) {
+              onSendMessage(message.trim());
+            }
+          }}
+          isLoading={isStreaming}
+          placeholder={isStreaming ? "Waiting for response..." : "Describe your feature or answer questions..."}
+        />
       </div>
+    </div>
+  );
+}
+
+function ElapsedTimer({ startedAt }: { startedAt: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const display = minutes > 0
+    ? `${minutes}m ${seconds.toString().padStart(2, "0")}s`
+    : `${seconds}s`;
+
+  return <span className="text-fg-faint">{display}</span>;
+}
+
+function ActivityIndicator({ activity, startedAt }: { activity: string | null; startedAt: number | null }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border-subtle bg-bg-raised px-4 py-3">
+      <div className="flex gap-1">
+        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:0ms]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:150ms]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:300ms]" />
+      </div>
+      <span className="text-xs text-fg-subtle">
+        {activity ?? "Planning agent is thinking..."}
+      </span>
+      {startedAt && <ElapsedTimer startedAt={startedAt} />}
     </div>
   );
 }
@@ -160,19 +165,6 @@ function AssistantMessage({ content }: { content: string }) {
       <ReactMarkdown remarkPlugins={[remarkGfm]}>
         {content}
       </ReactMarkdown>
-    </div>
-  );
-}
-
-function ThinkingIndicator() {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border-subtle bg-bg-raised px-4 py-3">
-      <div className="flex gap-1">
-        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:0ms]" />
-        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:150ms]" />
-        <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:300ms]" />
-      </div>
-      <span className="text-xs text-fg-subtle">Planning agent is thinking...</span>
     </div>
   );
 }

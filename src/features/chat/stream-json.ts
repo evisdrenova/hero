@@ -20,6 +20,11 @@ export interface PermissionRequest {
   input: Record<string, unknown>;
 }
 
+export interface AgentActivity {
+  toolName: string;
+  description: string;
+}
+
 export interface StreamJsonParser {
   /** Feed a raw JSONL line. Returns extracted text. */
   feed(chunk: string): string;
@@ -27,6 +32,7 @@ export interface StreamJsonParser {
 
 export function createStreamJsonParser(
   onPermissionRequest?: (req: PermissionRequest) => void,
+  onToolEvent?: (activity: AgentActivity) => void,
 ): StreamJsonParser {
   let buffer = "";
   /** True once we've seen at least one content_block_delta with text. */
@@ -61,6 +67,15 @@ export function createStreamJsonParser(
             continue;
           }
 
+          // Tool use events — surface as activity
+          if (onToolEvent) {
+            const activity = extractToolActivity(obj);
+            if (activity) {
+              console.log(`[parser] tool activity: ${activity.toolName} → ${activity.description}`);
+              onToolEvent(activity);
+            }
+          }
+
           const text = extractText(obj, sawStreamingDelta);
           if (text) {
             extracted += text;
@@ -68,6 +83,11 @@ export function createStreamJsonParser(
             if (obj.type === "content_block_delta") {
               sawStreamingDelta = true;
             }
+            console.log(`[parser] extracted ${text.length} chars from type=${obj.type as string} (sawDelta=${sawStreamingDelta})`);
+          } else {
+            const type = (obj.type as string) ?? "?";
+            const subtype = (obj.subtype as string) ?? "";
+            console.log(`[parser] no text from type=${type}${subtype ? "/" + subtype : ""}`);
           }
         } catch {
           // Not valid JSON — skip
@@ -123,4 +143,53 @@ function extractText(
   }
 
   return "";
+}
+
+function extractToolActivity(
+  obj: Record<string, unknown>,
+): AgentActivity | null {
+  // content_block_start with tool_use type — agent is invoking a tool
+  if (obj.type === "content_block_start") {
+    const block = obj.content_block as Record<string, unknown> | undefined;
+    if (block?.type === "tool_use" && typeof block.name === "string") {
+      return {
+        toolName: block.name,
+        description: formatToolLabel(block.name),
+      };
+    }
+  }
+
+  // tool_use subtype in assistant message
+  if (obj.type === "assistant") {
+    const message = obj.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    if (Array.isArray(content)) {
+      const toolBlock = content.find(
+        (b: Record<string, unknown>) => b.type === "tool_use",
+      ) as Record<string, unknown> | undefined;
+      if (toolBlock && typeof toolBlock.name === "string") {
+        return {
+          toolName: toolBlock.name,
+          description: formatToolLabel(toolBlock.name),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function formatToolLabel(toolName: string): string {
+  switch (toolName) {
+    case "Read": return "Reading file";
+    case "Write": return "Writing file";
+    case "Edit": return "Editing file";
+    case "Bash": return "Running command";
+    case "Glob": return "Searching files";
+    case "Grep": return "Searching code";
+    case "Agent": return "Dispatching agent";
+    case "WebSearch": return "Searching the web";
+    case "WebFetch": return "Fetching URL";
+    default: return `Using ${toolName}`;
+  }
 }
